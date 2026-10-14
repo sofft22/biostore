@@ -26,13 +26,11 @@ export default function ProductEdit() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
-  const [compareAtPrice, setCompareAtPrice] = useState("");
+  const [discount, setDiscount] = useState(""); // percent
   const [categoryId, setCategoryId] = useState("");
   const [subcategory, setSubcategory] = useState<string>("");
   const [badge, setBadge] = useState("");
   const [inStock, setInStock] = useState(true);
-  const [isFeatured, setIsFeatured] = useState(false);
-  const [sortOrder, setSortOrder] = useState<string>("");
   const [imageUrl, setImageUrl] = useState("");
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [variants, setVariants] = useState<Variant[]>([]);
@@ -74,19 +72,21 @@ export default function ProductEdit() {
     setName(product.name);
     setDescription(product.description ?? "");
     setPrice(String(product.price));
-    setCompareAtPrice(
-      product.compare_at_price ? String(product.compare_at_price) : ""
-    );
+
+    // Derive discount % from compare_at_price if present
+    if (product.compare_at_price && product.compare_at_price > product.price) {
+      const pct = Math.round(
+        ((product.compare_at_price - product.price) / product.compare_at_price) * 100
+      );
+      setDiscount(String(pct));
+    } else {
+      setDiscount("");
+    }
+
     setCategoryId(product.category_id);
     setSubcategory((product as any).subcategory ?? "");
     setBadge(product.badge ?? "");
     setInStock(product.in_stock);
-    setIsFeatured(!!product.is_featured);
-    setSortOrder(
-      (product as any).sort_order != null
-        ? String((product as any).sort_order)
-        : ""
-    );
     setImageUrl(product.image_url ?? "");
     setImageUrls(product.image_urls ?? []);
     setVariants(product.variants?.suggested ?? []);
@@ -136,45 +136,40 @@ export default function ProductEdit() {
   const removeVariant = (i: number) =>
     setVariants((prev) => prev.filter((_, idx) => idx !== i));
 
+  // Compute compare-at price from price + discount %
+  const numericPrice = Number(price) || 0;
+  const numericDiscount = Number(discount) || 0;
+  const compareAtPrice =
+    numericDiscount > 0 && numericPrice > 0
+      ? Math.round(numericPrice / (1 - numericDiscount / 100))
+      : null;
+
   const handleSave = async () => {
     setError("");
     if (!name.trim()) return setError("Name is required");
     if (!price || Number(price) <= 0) return setError("Valid price is required");
     if (!imageUrl) return setError("Main image is required");
     if (!categoryId) return setError("Pick a category first");
+    if (numericDiscount < 0 || numericDiscount >= 100) {
+      return setError("Discount must be between 0 and 99");
+    }
 
     setSaving(true);
-
-    if (isFeatured && currentStore?.slug) {
-      try {
-        const data = await storeApi.public(currentStore.slug);
-        const list = (data.products as Product[]) ?? [];
-        for (const p of list) {
-          if (p.id !== product?.id && p.is_featured) {
-            await productsApi.update(p.id, { is_featured: false });
-          }
-        }
-      } catch {
-        /* non-fatal */
-      }
-    }
 
     const payload: Partial<Product> = {
       name: name.trim(),
       description: description.trim(),
       price: Number(price),
-      compare_at_price: compareAtPrice ? Number(compareAtPrice) : null,
+      compare_at_price: compareAtPrice,
       category_id: categoryId,
       subcategory: (categoryId === "clothing" && subcategory
         ? subcategory
         : null) as any,
       badge: badge || null,
       in_stock: inStock,
-      is_featured: isFeatured,
       image_url: imageUrl,
       image_urls: imageUrls.length > 0 ? imageUrls : undefined,
       variants: variants.length > 0 ? { suggested: variants } : undefined,
-      sort_order: sortOrder !== "" ? Number(sortOrder) : (null as any),
     };
 
     try {
@@ -240,13 +235,61 @@ export default function ProductEdit() {
             <Field label="Description">
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short, evocative description." rows={3} className="pd-input" />
             </Field>
-            <Field label="Price (₦)">
-              <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="32000" className="pd-input" />
+          </div>
+        </section>
+
+        <section className="pd-section">
+          <h2 className="dash-section-title">Pricing</h2>
+          <div className="pd-fields">
+            <Field label="Price (₦)" hint="What customers pay">
+              <input
+                type="number"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="32000"
+                className="pd-input"
+              />
             </Field>
-            <Field label="Compare at (₦)" hint="Shows original price slashed next to current">
-              <input type="number" value={compareAtPrice} onChange={(e) => setCompareAtPrice(e.target.value)} placeholder="40000" className="pd-input" />
+            <Field label="Discount %" hint="Optional. 0 for no discount. Shows crossed-out original price.">
+              <input
+                type="number"
+                min={0}
+                max={99}
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                placeholder="0"
+                className="pd-input"
+              />
             </Field>
           </div>
+
+          {numericDiscount > 0 && numericPrice > 0 && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: "12px 16px",
+                borderRadius: 10,
+                background: "var(--green-soft)",
+                border: "1px solid rgba(15,122,74,0.2)",
+                fontSize: 13.5,
+                color: "var(--ink)",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <span style={{ fontWeight: 600, color: "var(--green)" }}>
+                {numericDiscount}% off
+              </span>
+              <span style={{ color: "var(--muted)" }}>
+                was ₦{compareAtPrice?.toLocaleString()}
+              </span>
+              <span style={{ fontWeight: 800 }}>
+                now ₦{numericPrice.toLocaleString()}
+              </span>
+            </div>
+          )}
         </section>
 
         <section className="pd-section">
@@ -296,21 +339,6 @@ export default function ProductEdit() {
         </section>
 
         <section className="pd-section">
-          <h2 className="dash-section-title">Banner</h2>
-          <div className="pd-toggle-row">
-            <div>
-              <p className="pd-toggle-title">Featured in banner</p>
-              <p className="pd-toggle-hint">
-                {isFeatured ? "Shows at the top of your storefront" : "Only one product can be featured"}
-              </p>
-            </div>
-            <button type="button" onClick={() => setIsFeatured(!isFeatured)} className={`pd-toggle ${isFeatured ? "on" : ""}`} aria-label="Toggle featured">
-              <span />
-            </button>
-          </div>
-        </section>
-
-        <section className="pd-section">
           <h2 className="dash-section-title">Stock</h2>
           <div className="pd-toggle-row">
             <div>
@@ -320,15 +348,6 @@ export default function ProductEdit() {
             <button type="button" onClick={() => setInStock(!inStock)} className={`pd-toggle ${inStock ? "on" : ""}`} aria-label="Toggle stock">
               <span />
             </button>
-          </div>
-        </section>
-
-        <section className="pd-section">
-          <h2 className="dash-section-title">Display order</h2>
-          <div className="pd-fields">
-            <Field label="Sort order" hint="Lower = earlier. Leave empty to use newest.">
-              <input type="number" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} placeholder="e.g. 1, 2, 3…" className="pd-input" />
-            </Field>
           </div>
         </section>
 
