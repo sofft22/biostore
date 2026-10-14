@@ -40,7 +40,6 @@ export default function Storefront() {
 
   const featured = useMemo(() => pickFeatured(products), [products]);
 
-  /* Only categories that have at least one product */
   const usedCategories = useMemo(() => {
     const usedIds = new Set<string>();
     for (const p of products) {
