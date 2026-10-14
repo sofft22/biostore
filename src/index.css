@@ -353,7 +353,11 @@ select.input { cursor: pointer; }
 .float { animation: bob 6s ease-in-out infinite; }
 
 /* Dashboard — content slides in from the right (sidebar on left) */
-.dash-main { min-width: 0; animation: slideFromRight 0.55s var(--ease) both; }
+.dash-main { min-width: 0; animation: slideFromRight 0.55s var(--ease) both; }.dash-main {
+  min-width: 0;
+  display: block;
+  animation: slideFromRight 0.55s var(--ease) both;
+}
 
 /* Auth — card slides in from below */
 .auth-card { opacity: 0; }
