@@ -332,7 +332,7 @@ export default function Landing() {
                   </div>
                 </div>
               </div>
-            </div>
+      
 
             {/* THREE STATS — all relate to the app */}
             <div className="hero-stats reveal">
