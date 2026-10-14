@@ -31,17 +31,12 @@ const I = {
 const SIGNUP_URL = "/signup";
 const WHATSAPP = "2348012345678";
 
-/* ─── Images — bold, eye-catching, fast CDN ───
-   Served via Unsplash CDN with explicit width + quality
-   so payload stays small (~30-60kb each).
-   Swap for your own /products/*.jpg anytime. */
+/* ─── Images ─── */
 const IMG = {
-  // Phone grid
   tote:     "https://images.unsplash.com/photo-1591561954557-26941169b49e?w=280&q=75&auto=format&fit=crop",
   sneakers: "https://images.unsplash.com/photo-1600185365483-26d7a4cc7519?w=280&q=75&auto=format&fit=crop",
   shea:     "https://images.unsplash.com/photo-1556228720-195a672e8a03?w=280&q=75&auto=format&fit=crop",
   hat:      "https://images.unsplash.com/photo-1521369909029-2afed882baee?w=280&q=75&auto=format&fit=crop",
-  // 3D product (bigger, hero quality)
   toteBig:  "https://images.unsplash.com/photo-1591561954557-26941169b49e?w=600&q=80&auto=format&fit=crop",
 };
 
@@ -207,7 +202,6 @@ export default function Landing() {
   useCursorGlow();
 
   const sceneRef = useRef<HTMLDivElement>(null);
-  const cwrapRef = useRef<HTMLDivElement>(null);
   useScrollRotate(sceneRef);
 
   useEffect(() => { setMounted(true); }, []);
@@ -245,7 +239,7 @@ export default function Landing() {
             <a href="#features" className="nav-link">Features</a>
             <a href="#pricing" className="nav-link">Pricing</a>
             <a href="#faq" className="nav-link">Questions</a>
-            <Link to={SIGNUP_URL} className="btn sm nav-cta-desktop">
+            <Link to={SIGNUP_URL} className="btn btn--sm nav-cta-desktop">
               Create your store {I.arrow}
             </Link>
           </div>
@@ -265,7 +259,9 @@ export default function Landing() {
             <div className="blob w" />
           </div>
 
-        
+          <div className="wrap">
+            <div className="hero-grid">
+              <div className="hero-in">
                 <h1 className="h-hero" style={{ marginTop: 32 }}>
                   Your bio link,<br />but it sells.
                 </h1>
@@ -280,8 +276,8 @@ export default function Landing() {
                   </Link>
                   <a href="#how" className="link">See how it works</a>
                 </div>
+              </div>
 
-            
               <div className="scene" ref={sceneRef} role="img" aria-label="A phone showing a biomart catalogue">
                 <div className={`stage ${mounted ? "enter" : ""}`} data-stage>
                   <div className="phone">
@@ -332,9 +328,9 @@ export default function Landing() {
                   </div>
                 </div>
               </div>
-      
+            </div>
 
-            {/* THREE STATS — all relate to the app */}
+            {/* THREE STATS */}
             <div className="hero-stats reveal">
               <div>
                 <div className="stat-num"><CountUp to={300} suffix="+" /></div>
@@ -471,8 +467,7 @@ export default function Landing() {
               </div>
             </div>
 
-            {/* 3D product page — taller now, nothing gets cut */}
-            <div className="cwrap" ref={cwrapRef} aria-hidden="true">
+            <div className="cwrap" aria-hidden="true">
               <div className="stack" data-stage>
                 <div className="layer base">
                   <div className="photo">
@@ -574,7 +569,7 @@ export default function Landing() {
               <div className="plan reveal">
                 <h3>Free</h3>
                 <p className="desc">Try biomart.</p>
-                <div className={`p ${morph ? "morph" : ""}`}>
+                <div className="p">
                   <span>₦0</span>
                 </div>
                 <ul>
@@ -589,7 +584,7 @@ export default function Landing() {
               <div className="plan reveal">
                 <h3>Starter</h3>
                 <p className="desc">Just getting going.</p>
-                <div className={`p ${morph ? "morph" : ""}`}>
+                <div className="p">
                   <span>{billing === "m" ? "₦2,000" : "₦5,500"}</span>
                   <span className="per">{billing === "m" ? "/month" : "/3 months"}</span>
                 </div>
@@ -606,7 +601,7 @@ export default function Landing() {
                 <span className="badge">24/7 customer support</span>
                 <h3>Pro</h3>
                 <p className="desc">Full catalogue.</p>
-                <div className={`p ${morph ? "morph" : ""}`}>
+                <div className="p">
                   <span>{billing === "m" ? "₦4,000" : "₦11,000"}</span>
                   <span className="per">{billing === "m" ? "/month" : "/3 months"}</span>
                 </div>
