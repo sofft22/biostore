@@ -8,7 +8,6 @@ import type { Product } from "../types";
 
 /* ─────────────────────────────────────────────
    Mock stats — swap for real API when ready.
-   Shape stays the same, only the source changes.
    ───────────────────────────────────────────── */
 type Daily = { date: string; count: number };
 type Stat = {
@@ -20,8 +19,6 @@ type Stat = {
 };
 
 function useStoreStats(products: Product[]): Stat {
-  // Real: fetch('/api/stats').then(r => r.json())
-  // Mock: derives believable numbers from what we already have
   const baseViews = 1240 + products.length * 24;
 
   const daily: Daily[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
@@ -48,7 +45,7 @@ function useStoreStats(products: Product[]): Stat {
 }
 
 /* ─────────────────────────────────────────────
-   Tiny SVG line chart — no deps
+   Tiny SVG line chart
    ───────────────────────────────────────────── */
 function ViewsChart({ data }: { data: Daily[] }) {
   const W = 640;
@@ -63,10 +60,7 @@ function ViewsChart({ data }: { data: Daily[] }) {
   });
 
   const line = points.map((p) => `${p.x},${p.y}`).join(" ");
-  const area =
-    `${PAD},${H - PAD} ` +
-    line +
-    ` ${W - PAD},${H - PAD}`;
+  const area = `${PAD},${H - PAD} ` + line + ` ${W - PAD},${H - PAD}`;
 
   return (
     <svg
@@ -82,13 +76,8 @@ function ViewsChart({ data }: { data: Daily[] }) {
         </linearGradient>
       </defs>
 
-      {/* baseline */}
       <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--line)" strokeWidth="1" />
-
-      {/* area */}
       <polygon points={area} fill="url(#area)" />
-
-      {/* line */}
       <polyline
         points={line}
         fill="none"
@@ -98,12 +87,10 @@ function ViewsChart({ data }: { data: Daily[] }) {
         strokeLinejoin="round"
       />
 
-      {/* dots */}
       {points.map((p, i) => (
         <circle key={i} cx={p.x} cy={p.y} r="3.5" fill="var(--green)" />
       ))}
 
-      {/* labels */}
       {points.map((p, i) => (
         <text
           key={i}
@@ -158,19 +145,34 @@ export default function Overview() {
 
   return (
     <DashboardLayout>
-      <section className="dash-head">
+      {/* ── Head ── */}
+      <div className="dash-head" style={{ padding: 0 }}>
         <p className="dash-head-eyebrow">Overview</p>
         <h1 className="dash-title">
           Hey, <em>{store.name || "there"}</em>.
         </h1>
-      </section>
+        <p className="dash-head-lead">
+          Here's how your store is doing this week.
+        </p>
+      </div>
 
       {/* ── Stat cards ── */}
-      <section className="ov-stats">
-        <div className="ov-stat">
-          <p className="ov-stat-label">Views today</p>
-          <p className="ov-stat-value">{stats.todayViews.toLocaleString()}</p>
-          <p className={`ov-stat-delta ${delta >= 0 ? "up" : "down"}`}>
+      <div className="ov-stats" style={{ padding: 0 }}>
+        {/* Featured green card */}
+        <div
+          className="ov-stat"
+          style={{
+            background: "linear-gradient(160deg, var(--green), var(--green-lite))",
+            borderColor: "var(--green)",
+            color: "#fff",
+          }}
+        >
+          <p className="ov-stat-label" style={{ color: "rgba(255,255,255,0.7)" }}>Views today</p>
+          <p className="ov-stat-value" style={{ color: "#fff" }}>{stats.todayViews.toLocaleString()}</p>
+          <p
+            className={`ov-stat-delta ${delta >= 0 ? "up" : "down"}`}
+            style={{ color: delta >= 0 ? "#d8ffe7" : "#ffd9d6" }}
+          >
             {delta >= 0 ? "↑" : "↓"} {Math.abs(delta)}% vs yesterday
           </p>
         </div>
@@ -202,10 +204,10 @@ export default function Overview() {
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           </Link>
         </div>
-      </section>
+      </div>
 
       {/* ── Views chart ── */}
-      <section className={`ov-panel ${mounted ? "in" : ""}`}>
+      <div className={`ov-panel ${mounted ? "in" : ""}`} style={{ padding: 22 }}>
         <div className="ov-panel-head">
           <div>
             <h2 className="dash-section-title">Store views</h2>
@@ -219,11 +221,11 @@ export default function Overview() {
         <div className="ov-chart-wrap">
           <ViewsChart data={stats.daily} />
         </div>
-      </section>
+      </div>
 
       {/* ── Store link ── */}
-      <section className="dash-link-card">
-        <div className="dash-link-info">
+      <div className="dash-link-card" style={{ padding: "16px 20px" }}>
+        <div>
           <p className="dash-link-label">Your store link</p>
           <p className="dash-link-url">
             {location.host}/store/<b>{store.slug}</b>
@@ -242,10 +244,10 @@ export default function Overview() {
             View store
           </a>
         </div>
-      </section>
+      </div>
 
       {/* ── Top products ── */}
-      <section className="ov-panel">
+      <div className="ov-panel" style={{ padding: 22 }}>
         <div className="ov-panel-head">
           <div>
             <h2 className="dash-section-title">Top products</h2>
@@ -287,10 +289,10 @@ export default function Overview() {
             ))}
           </ul>
         )}
-      </section>
+      </div>
 
       {/* ── Quick actions ── */}
-      <section className="ov-quick">
+      <div className="ov-quick" style={{ padding: 0 }}>
         <Link to="/dashboard/product" className="ov-quick-btn">
           <span className="ov-quick-icon">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -325,7 +327,7 @@ export default function Overview() {
             <small>Name, WhatsApp, link</small>
           </span>
         </Link>
-      </section>
+      </div>
     </DashboardLayout>
   );
 }
