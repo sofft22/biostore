@@ -102,7 +102,7 @@ export const products = {
 };
 
 /* ══════════════════════════════════════════════════
-   CATEGORIES (global list + per-store images)
+   CATEGORIES
    ══════════════════════════════════════════════════ */
 export const categories = {
   list: () =>
@@ -132,7 +132,7 @@ export const categoryImages = {
 };
 
 /* ══════════════════════════════════════════════════
-   IMAGE UPLOAD — sends multipart/form-data to /api/upload
+   IMAGE UPLOAD
    ══════════════════════════════════════════════════ */
 export async function uploadImage(file: File | Blob): Promise<string> {
   const form = new FormData();
@@ -142,15 +142,22 @@ export async function uploadImage(file: File | Blob): Promise<string> {
     method: "POST",
     credentials: "include",
     body: form,
-    // ⚠️ Do NOT set content-type — browser sets multipart boundary itself
   });
 
   const data = (await res.json().catch(() => null)) as
-    | { url?: string; error?: string }
+    | {
+        url?: string;
+        error?: string;
+        detail?: { error?: { message?: string } };
+      }
     | null;
 
   if (!res.ok || !data || !data.url) {
-    throw new ApiError(data?.error || "Upload failed", res.status);
+    const realError =
+      data?.detail?.error?.message ||
+      data?.error ||
+      `Upload failed (${res.status})`;
+    throw new ApiError(realError, res.status);
   }
   return data.url;
 }
