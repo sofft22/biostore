@@ -2941,9 +2941,12 @@ textarea.pd-input { resize: vertical; min-height: 68px; }
   border-radius: 18px;
   background: var(--card);
   margin-bottom: 14px;
-  overflow: hidden;
+  overflow: visible;
   transition: border-color 0.25s ease, box-shadow 0.3s ease;
 }
+.cat-head { border-radius: 18px 18px 0 0; }
+.cat-body { border-radius: 0 0 18px 18px; }
+.cat:not(.open) .cat-head { border-radius: 18px; }
 .cat:hover { border-color: rgba(15, 122, 74, 0.3); }
 .cat.open {
   border-color: rgba(15, 122, 74, 0.4);
