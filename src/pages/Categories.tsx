@@ -1,294 +1,211 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
+import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
-import DashboardLayout from "../components/DashboardLayout";
+import { uploadImage } from "../lib/api";
 import {
-  store as storeApi,
-  uploadImage,
-  products as productsApi,
-} from "../lib/api";
-import type { Product } from "../types";
+  getCategories,
+  addCategory,
+  updateCategory,
+  removeCategory,
+  reorderCategories,
+  getCategoryImages,
+  setCategoryImage,
+  removeCategoryImage,
+} from "../lib/storeData";
+import type { Category } from "../types";
 
-export default function Settings() {
-  const { store, refresh } = useAuth();
+export default function Categories() {
+  const { store } = useAuth();
   const toast = useToast();
 
-  const [name, setName] = useState(store?.name ?? "");
-  const [bio, setBio] = useState(store?.bio ?? "");
-  const [whatsapp, setWhatsapp] = useState(store?.whatsapp ?? "");
-  const [instagram, setInstagram] = useState(store?.instagram ?? "");
-  const [tiktok, setTiktok] = useState(store?.tiktok ?? "");
-  const [coverUrl, setCoverUrl] = useState(store?.cover_url ?? "");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [images, setImages] = useState<Record<string, string>>({});
+  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [featuredId, setFeaturedId] = useState<string>("");
-
-  const [saving, setSaving] = useState(false);
-  const [uploadingCover, setUploadingCover] = useState(false);
-
-  const coverInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
+  const refresh = () => {
     if (!store?.slug) return;
-    (async () => {
-      try {
-        const data = await storeApi.public(store.slug);
-        const list = (data.products as Product[]) ?? [];
-        setProducts(list);
-        const featured = list.find((p) => p.is_featured);
-        setFeaturedId(featured?.id ?? "");
-      } catch {
-        setProducts([]);
-      }
-    })();
-  }, [store?.slug]);
+    setCategories(getCategories(store.slug));
+    setImages(getCategoryImages(store.slug));
+  };
 
   useEffect(() => {
-    if (!store) return;
-    setName(store.name);
-    setBio(store.bio ?? "");
-    setWhatsapp(store.whatsapp);
-    setInstagram(store.instagram ?? "");
-    setTiktok(store.tiktok ?? "");
-    setCoverUrl(store.cover_url ?? "");
-  }, [store]);
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store?.slug]);
 
   if (!store) return null;
 
-  const handleSaveStore = async () => {
-    setSaving(true);
-    try {
-      await storeApi.update({
-        name: name.trim(),
-        bio: bio.trim() || null,
-        whatsapp: whatsapp.trim(),
-        instagram: instagram.trim() || null,
-        tiktok: tiktok.trim() || null,
-        cover_url: coverUrl || null,
-      });
-      await refresh();
-      toast.show("Store saved");
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : "Could not save");
-    }
-    setSaving(false);
+  const handleAdd = () => {
+    const result = addCategory(store.slug, newName);
+    if (!result.ok) { toast.show(result.error); return; }
+    setNewName("");
+    refresh();
+    toast.show("Category added");
   };
 
-  const handleUploadCover = async (file: File) => {
-    setUploadingCover(true);
+  const handleRename = (id: string) => {
+    const result = updateCategory(store.slug, id, editingName);
+    if (!result.ok) { toast.show(result.error); return; }
+    setEditingId(null);
+    setEditingName("");
+    refresh();
+    toast.show("Renamed");
+  };
+
+  const handleDelete = (id: string, label: string) => {
+    if (!confirm(`Delete "${label}"? Products in it won't be deleted.`)) return;
+    removeCategory(store.slug, id);
+    refresh();
+    toast.show("Category deleted");
+  };
+
+  const handleUploadImage = async (id: string, file: File) => {
+    setUploadingId(id);
     try {
       const url = await uploadImage(file);
-      setCoverUrl(url);
-      await storeApi.update({ cover_url: url });
-      await refresh();
-      toast.show("Banner updated");
+      setCategoryImage(store.slug, id, url);
+      refresh();
+      toast.show("Image saved");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : "Upload failed");
     }
-    setUploadingCover(false);
+    setUploadingId(null);
   };
 
-  const handleSetFeatured = async (productId: string) => {
-    try {
-      for (const p of products) {
-        const shouldBeFeatured = p.id === productId;
-        if (!!p.is_featured !== shouldBeFeatured) {
-          await productsApi.update(p.id, { is_featured: shouldBeFeatured });
-        }
-      }
-      setFeaturedId(productId);
-      toast.show("Banner updated");
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : "Could not update");
-    }
+  const handleRemoveImage = (id: string) => {
+    removeCategoryImage(store.slug, id);
+    refresh();
+    toast.show("Image removed");
+  };
+
+  const move = (id: string, dir: -1 | 1) => {
+    const idx = categories.findIndex((c) => c.id === id);
+    if (idx < 0) return;
+    const target = idx + dir;
+    if (target < 0 || target >= categories.length) return;
+    const next = [...categories];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    reorderCategories(store.slug, next);
+    refresh();
   };
 
   return (
     <DashboardLayout>
       <section className="dash-head">
-        <p className="dash-head-eyebrow">Settings</p>
+        <p className="dash-head-eyebrow">Categories</p>
         <h1 className="dash-title">
-          Your <em>store</em>.
+          Your <em>shelves</em>.
         </h1>
         <p className="dash-head-lead">
-          These appear on your public storefront.
+          Group your products so customers find what they want. Add an image to make a category stand out on your storefront.
         </p>
       </section>
 
-      <section className="st-panel">
-        <div className="st-panel-head">
-          <h2 className="dash-section-title">Store profile</h2>
-        </div>
-        <div className="st-panel-body">
-          <div className="st-field">
-            <label className="st-label">Store name</label>
-            <input className="st-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
-          </div>
-          <div className="st-field">
-            <label className="st-label">Bio</label>
-            <textarea className="st-input st-textarea" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Bags, shoes and skincare · Lagos" rows={2} />
-          </div>
-          <div className="st-field">
-            <label className="st-label">WhatsApp number</label>
-            <input className="st-input" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="08012345678" inputMode="tel" />
-          </div>
-          <div className="st-row-2">
-            <div className="st-field">
-              <label className="st-label">Instagram handle</label>
-              <input className="st-input" value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="adaezescloset" />
-            </div>
-            <div className="st-field">
-              <label className="st-label">TikTok handle</label>
-              <input className="st-input" value={tiktok} onChange={(e) => setTiktok(e.target.value)} placeholder="adaezescloset" />
-            </div>
-          </div>
-          <button onClick={handleSaveStore} disabled={saving} className="st-save">
-            {saving ? "Saving…" : "Save changes"}
-          </button>
-        </div>
+      <section className="cat-add">
+        <input
+          className="cat-add-input"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+          placeholder="New category name (e.g. Wigs)"
+          maxLength={30}
+        />
+        <button onClick={handleAdd} className="cat-add-btn">Add</button>
       </section>
 
-      <section className="st-panel">
-        <div className="st-panel-head">
-          <h2 className="dash-section-title">Banner image</h2>
-        </div>
-        <div className="st-panel-body">
-          <p className="st-help">
-            Shown at the top of your storefront when no featured product is picked below.
-          </p>
-          {coverUrl ? (
-            <div className="st-banner-preview">
-              <img src={coverUrl} alt="Banner" />
-              <button
-                type="button"
-                className="st-banner-x"
-                onClick={async () => {
-                  setCoverUrl("");
-                  await storeApi.update({ cover_url: null });
-                  await refresh();
-                  toast.show("Banner removed");
-                }}
-                aria-label="Remove banner"
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-              </button>
-            </div>
-          ) : (
-            <label className="st-banner-add">
-              {uploadingCover ? (
-                <div className="dash-spinner" />
-              ) : (
-                <>
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-                  <span>Upload banner</span>
-                </>
-              )}
-              <input
-                ref={coverInputRef}
-                type="file"
-                accept="image/*"
-                hidden
-                disabled={uploadingCover}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleUploadCover(file);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-          )}
-        </div>
-      </section>
-
-      <section className="st-panel">
-        <div className="st-panel-head">
-          <h2 className="dash-section-title">Featured product</h2>
-        </div>
-        <div className="st-panel-body">
-          <p className="st-help">
-            Pick one product to feature in your storefront banner. Only one at a time.
-          </p>
-          {products.length === 0 ? (
-            <p className="st-help" style={{ opacity: 0.6 }}>No products yet.</p>
-          ) : (
-            <div className="st-featured-list">
-              {products.map((p) => {
-                const active = featuredId === p.id;
-                const img = (p.images && p.images[0]) || p.image_url;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handleSetFeatured(p.id)}
-                    className={`st-featured-item ${active ? "on" : ""}`}
-                  >
-                    <div className="st-featured-thumb">
-                      {img ? <img src={img} alt={p.name} /> : null}
-                    </div>
-                    <div className="st-featured-info">
-                      <p className="st-featured-name">{p.name}</p>
-                      <p className="st-featured-meta">
-                        {p.in_stock ? "In stock" : "Sold out"}
-                      </p>
-                    </div>
-                    {active && (
-                      <span className="st-featured-check">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="st-panel">
-        <div className="st-panel-head">
-          <h2 className="dash-section-title">Public link</h2>
-        </div>
-        <div className="st-panel-body">
-          <div className="dash-link-card" style={{ margin: 0 }}>
-            <div>
-              <p className="dash-link-label">Your store link</p>
-              <p className="dash-link-url">
-                {location.host}/store/<b>{store.slug}</b>
-              </p>
-            </div>
-            <div className="dash-link-actions">
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(location.origin + "/store/" + store.slug);
-                  toast.show("Link copied");
-                }}
-                className="dash-btn dash-btn-line"
-              >
-                Copy
-              </button>
-            </div>
+      {categories.length === 0 ? (
+        <div className="dash-empty">
+          <div className="dash-empty-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 5h16v14H4z" /><path d="M4 10h16" />
+            </svg>
           </div>
+          <p className="dash-empty-title">No categories yet</p>
+          <p className="dash-empty-sub">Add your first one above.</p>
         </div>
-      </section>
+      ) : (
+        <ul className="cat-list">
+          {categories.map((c, i) => {
+            const img = images[c.id];
+            const isEditing = editingId === c.id;
+            const busy = uploadingId === c.id;
+            return (
+              <li key={c.id} className="cat-row">
+                <div className="cat-row-img">
+                  {img ? (
+                    <>
+                      <img src={img} alt={c.label} />
+                      <button type="button" className="cat-row-img-x" onClick={() => handleRemoveImage(c.id)} aria-label="Remove image">
+                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                      </button>
+                    </>
+                  ) : (
+                    <label className="cat-row-img-add">
+                      {busy ? (
+                        <div className="dash-spinner" />
+                      ) : (
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        disabled={busy}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadImage(c.id, file);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
 
-      <section className="st-panel st-panel-danger">
-        <div className="st-panel-head">
-          <h2 className="dash-section-title">Danger zone</h2>
-        </div>
-        <div className="st-panel-body">
-          <p className="st-help">
-            Deleting your store removes every product and cancels your plan. This cannot be undone.
-          </p>
-          <button
-            type="button"
-            className="st-danger-btn"
-            onClick={() => toast.show("Contact support to delete your store")}
-          >
-            Delete store
-          </button>
-        </div>
-      </section>
+                <div className="cat-row-name">
+                  {isEditing ? (
+                    <input
+                      className="cat-row-input"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleRename(c.id);
+                        if (e.key === "Escape") { setEditingId(null); setEditingName(""); }
+                      }}
+                      autoFocus
+                    />
+                  ) : (
+                    <p className="cat-row-label">{c.label}</p>
+                  )}
+                </div>
+
+                <div className="cat-row-actions">
+                  {isEditing ? (
+                    <>
+                      <button className="cat-action primary" onClick={() => handleRename(c.id)}>Save</button>
+                      <button className="cat-action" onClick={() => { setEditingId(null); setEditingName(""); }}>Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="cat-action" onClick={() => move(c.id, -1)} disabled={i === 0} aria-label="Move up">↑</button>
+                      <button className="cat-action" onClick={() => move(c.id, 1)} disabled={i === categories.length - 1} aria-label="Move down">↓</button>
+                      <button className="cat-action" onClick={() => { setEditingId(c.id); setEditingName(c.label); }}>Rename</button>
+                      <button className="cat-action danger" onClick={() => handleDelete(c.id, c.label)}>Delete</button>
+                    </>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <p className="cat-help">
+        Categories you add here appear in the product editor and on your storefront.
+      </p>
     </DashboardLayout>
   );
 }
