@@ -126,7 +126,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </nav>
             </aside>
 
-            <main className="dash-main">{children}</main>
+            <main className="dash-main">
+              {children}
+            </main>
           </div>
         </div>
       </div>
