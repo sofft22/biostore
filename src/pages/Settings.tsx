@@ -1,339 +1,454 @@
-import { useState, useRef, useEffect } from "react";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../components/Toast";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import DashboardLayout from "../components/DashboardLayout";
-import { store as storeApi, uploadImage, products as productsApi, store as storeApiFull } from "../lib/api";
-import type { Product } from "../types";
+import { products as productsApi, uploadImage, store as storeApi } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
+import { SUBCATEGORIES } from "../lib/categories";
+import { getCategories } from "../lib/storeData";
+import type { Category, Product } from "../types";
 
-export default function Settings() {
-  const { store, refresh } = useAuth();
-  const toast = useToast();
+const BADGES = ["Bestseller", "New", "Limited"];
 
-  const [name, setName] = useState(store?.name ?? "");
-  const [bio, setBio] = useState(store?.bio ?? "");
-  const [whatsapp, setWhatsapp] = useState(store?.whatsapp ?? "");
-  const [instagram, setInstagram] = useState(store?.instagram ?? "");
-  const [tiktok, setTiktok] = useState(store?.tiktok ?? "");
-  const [coverUrl, setCoverUrl] = useState(store?.cover_url ?? "");
+interface Variant {
+  label: string;
+  priceDelta: number;
+}
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [featuredId, setFeaturedId] = useState<string>("");
+export default function ProductEdit() {
+  const { id } = useParams<{ id: string }>();
+  const nav = useNavigate();
+  const { store: currentStore } = useAuth();
 
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loadingProduct, setLoadingProduct] = useState(!!id);
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("");
+  const [compareAtPrice, setCompareAtPrice] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [subcategory, setSubcategory] = useState<string>("");
+  const [badge, setBadge] = useState("");
+  const [inStock, setInStock] = useState(true);
+  const [isFeatured, setIsFeatured] = useState(false);
+  const [sortOrder, setSortOrder] = useState<string>("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [variants, setVariants] = useState<Variant[]>([]);
+
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [uploadingCover, setUploadingCover] = useState(false);
+  const [error, setError] = useState("");
 
-  const coverInputRef = useRef<HTMLInputElement | null>(null);
-
-  /* Load products to power the featured picker */
+  /* Load categories for this store */
   useEffect(() => {
-    if (!store?.slug) return;
-    (async () => {
-      try {
-        const data = await storeApiFull.public(store.slug);
-        const list = (data.products as Product[]) ?? [];
-        setProducts(list);
-        const featured = list.find((p) => p.is_featured);
-        setFeaturedId(featured?.id ?? "");
-      } catch {
-        setProducts([]);
-      }
-    })();
-  }, [store?.slug]);
+    if (!currentStore?.slug) return;
+    const list = getCategories(currentStore.slug);
+    setCategories(list);
+    if (!categoryId && list.length > 0) setCategoryId(list[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStore?.slug]);
 
+  /* Load existing product */
   useEffect(() => {
-    if (!store) return;
-    setName(store.name);
-    setBio(store.bio ?? "");
-    setWhatsapp(store.whatsapp);
-    setInstagram(store.instagram ?? "");
-    setTiktok(store.tiktok ?? "");
-    setCoverUrl(store.cover_url ?? "");
-  }, [store]);
-
-  if (!store) return null;
-
-  const handleSaveStore = async () => {
-    setSaving(true);
-    try {
-      await storeApi.update({
-        name: name.trim(),
-        bio: bio.trim() || null,
-        whatsapp: whatsapp.trim(),
-        instagram: instagram.trim() || null,
-        tiktok: tiktok.trim() || null,
-        cover_url: coverUrl || null,
-      });
-      await refresh();
-      toast.show("Store saved");
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : "Could not save");
+    if (!id || !currentStore?.slug) {
+      setLoadingProduct(false);
+      return;
     }
-    setSaving(false);
+    (async () => {
+      setLoadingProduct(true);
+      try {
+        const data = await storeApi.public(currentStore.slug);
+        const found =
+          (data.products as Product[] | undefined)?.find((x) => x.id === id) ??
+          null;
+        setProduct(found);
+      } catch {
+        setProduct(null);
+      }
+      setLoadingProduct(false);
+    })();
+  }, [id, currentStore?.slug]);
+
+  /* Hydrate form */
+  useEffect(() => {
+    if (!product) return;
+    setName(product.name);
+    setDescription(product.description ?? "");
+    setPrice(String(product.price));
+    setCompareAtPrice(
+      product.compare_at_price ? String(product.compare_at_price) : ""
+    );
+    setCategoryId(product.category_id);
+    setSubcategory((product as any).subcategory ?? "");
+    setBadge(product.badge ?? "");
+    setInStock(product.in_stock);
+    setIsFeatured(!!product.is_featured);
+    setSortOrder(
+      (product as any).sort_order != null
+        ? String((product as any).sort_order)
+        : ""
+    );
+    setImageUrl(product.image_url ?? "");
+    setImageUrls(product.image_urls ?? []);
+    setVariants(product.variants?.suggested ?? []);
+  }, [product]);
+
+  const allImages = [imageUrl, ...imageUrls].filter(Boolean);
+
+  const setImages = (list: string[]) => {
+    setImageUrl(list[0] ?? "");
+    setImageUrls(list.slice(1));
   };
 
-  const handleUploadCover = async (file: File) => {
-    setUploadingCover(true);
+  const handleImageUpload = async (file: File) => {
+    if (allImages.length >= 3) {
+      setError("Max 3 images per product");
+      return;
+    }
+    setUploading(true);
     try {
       const url = await uploadImage(file);
-      setCoverUrl(url);
-      await storeApi.update({ cover_url: url });
-      await refresh();
-      toast.show("Banner updated");
+      setImages([...allImages, url]);
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : "Upload failed");
+      setError(err instanceof Error ? err.message : "Upload failed");
     }
-    setUploadingCover(false);
+    setUploading(false);
   };
 
-  const handleSetFeatured = async (productId: string) => {
-    try {
-      /* Un-feature all others, then feature this one */
-      for (const p of products) {
-        const shouldBeFeatured = p.id === productId;
-        if (!!p.is_featured !== shouldBeFeatured) {
-          await productsApi.update(p.id, { is_featured: shouldBeFeatured });
+  const removeImage = (i: number) =>
+    setImages(allImages.filter((_, idx) => idx !== i));
+
+  const moveImage = (i: number, dir: -1 | 1) => {
+    const next = [...allImages];
+    const t = i + dir;
+    if (t < 0 || t >= next.length) return;
+    [next[i], next[t]] = [next[t], next[i]];
+    setImages(next);
+  };
+
+  const addVariant = () =>
+    setVariants((v) => [...v, { label: "", priceDelta: 0 }]);
+
+  const updateVariant = (i: number, patch: Partial<Variant>) =>
+    setVariants((prev) =>
+      prev.map((v, idx) => (idx === i ? { ...v, ...patch } : v))
+    );
+
+  const removeVariant = (i: number) =>
+    setVariants((prev) => prev.filter((_, idx) => idx !== i));
+
+  const handleSave = async () => {
+    setError("");
+    if (!name.trim()) return setError("Name is required");
+    if (!price || Number(price) <= 0) return setError("Valid price is required");
+    if (!imageUrl) return setError("Main image is required");
+    if (!categoryId) return setError("Pick a category first");
+
+    setSaving(true);
+
+    /* If featuring this product, unfeature all others first */
+    if (isFeatured && currentStore?.slug) {
+      try {
+        const data = await storeApi.public(currentStore.slug);
+        const list = (data.products as Product[]) ?? [];
+        for (const p of list) {
+          if (p.id !== product?.id && p.is_featured) {
+            await productsApi.update(p.id, { is_featured: false });
+          }
         }
+      } catch {
+        /* non-fatal */
       }
-      setFeaturedId(productId);
-      toast.show("Banner updated");
+    }
+
+    const payload: Partial<Product> = {
+      name: name.trim(),
+      description: description.trim(),
+      price: Number(price),
+      compare_at_price: compareAtPrice ? Number(compareAtPrice) : null,
+      category_id: categoryId,
+      subcategory: (categoryId === "clothing" && subcategory
+        ? subcategory
+        : null) as any,
+      badge: badge || null,
+      in_stock: inStock,
+      is_featured: isFeatured,
+      image_url: imageUrl,
+      image_urls: imageUrls.length > 0 ? imageUrls : undefined,
+      variants: variants.length > 0 ? { suggested: variants } : undefined,
+      sort_order: sortOrder !== "" ? Number(sortOrder) : (null as any),
+    };
+
+    try {
+      if (product) {
+        await productsApi.update(product.id, payload);
+      } else {
+        await productsApi.create(payload);
+      }
+      nav("/dashboard/products");
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : "Could not update");
+      setError(err instanceof Error ? err.message : "Could not save");
+      setSaving(false);
     }
   };
+
+  const handleDelete = async () => {
+    if (!product) return;
+    if (!confirm(`Delete "${product.name}"?`)) return;
+    try {
+      await productsApi.remove(product.id);
+      nav("/dashboard/products");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete");
+    }
+  };
+
+  if (loadingProduct) {
+    return (
+      <DashboardLayout>
+        <div className="dash-loading-inline">
+          <div className="dash-spinner" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const canAddMore = allImages.length < 3;
+  const isClothing = categoryId === "clothing";
 
   return (
     <DashboardLayout>
+      <button onClick={() => nav("/dashboard/products")} className="pd-back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        Back to products
+      </button>
+
       <section className="dash-head">
-        <p className="dash-head-eyebrow">Settings</p>
+        <p className="dash-head-eyebrow">{product ? "Edit" : "New"}</p>
         <h1 className="dash-title">
-          Your <em>store</em>.
+          {product ? <>Edit <em>product</em>.</> : <>New <em>product</em>.</>}
         </h1>
-        <p className="dash-head-lead">
-          These appear on your public storefront.
-        </p>
       </section>
 
-      {/* Store profile */}
-      <section className="st-panel">
-        <div className="st-panel-head">
-          <h2 className="dash-section-title">Store profile</h2>
-        </div>
-        <div className="st-panel-body">
-          <div className="st-field">
-            <label className="st-label">Store name</label>
-            <input
-              className="st-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={60}
-            />
+      <div className="pd-form">
+        {/* Basics */}
+        <section className="pd-section">
+          <h2 className="dash-section-title">Basics</h2>
+          <div className="pd-fields">
+            <Field label="Name">
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Mira Tote" className="pd-input" />
+            </Field>
+            <Field label="Description">
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short, evocative description." rows={3} className="pd-input" />
+            </Field>
+            <Field label="Price (₦)">
+              <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="32000" className="pd-input" />
+            </Field>
+            <Field label="Compare at (₦)" hint="Shows original price slashed next to current">
+              <input type="number" value={compareAtPrice} onChange={(e) => setCompareAtPrice(e.target.value)} placeholder="40000" className="pd-input" />
+            </Field>
           </div>
+        </section>
 
-          <div className="st-field">
-            <label className="st-label">Bio</label>
-            <textarea
-              className="st-input st-textarea"
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="Bags, shoes and skincare · Lagos"
-              rows={2}
-            />
-          </div>
-
-          <div className="st-field">
-            <label className="st-label">WhatsApp number</label>
-            <input
-              className="st-input"
-              value={whatsapp}
-              onChange={(e) => setWhatsapp(e.target.value)}
-              placeholder="08012345678"
-              inputMode="tel"
-            />
-          </div>
-
-          <div className="st-row-2">
-            <div className="st-field">
-              <label className="st-label">Instagram handle</label>
-              <input
-                className="st-input"
-                value={instagram}
-                onChange={(e) => setInstagram(e.target.value)}
-                placeholder="adaezescloset"
-              />
-            </div>
-            <div className="st-field">
-              <label className="st-label">TikTok handle</label>
-              <input
-                className="st-input"
-                value={tiktok}
-                onChange={(e) => setTiktok(e.target.value)}
-                placeholder="adaezescloset"
-              />
-            </div>
-          </div>
-
-          <button
-            onClick={handleSaveStore}
-            disabled={saving}
-            className="st-save"
-          >
-            {saving ? "Saving…" : "Save changes"}
-          </button>
-        </div>
-      </section>
-
-      {/* Banner */}
-      <section className="st-panel">
-        <div className="st-panel-head">
-          <h2 className="dash-section-title">Banner image</h2>
-        </div>
-        <div className="st-panel-body">
-          <p className="st-help">
-            Shown at the top of your storefront when no featured product is
-            picked below.
-          </p>
-
-          {coverUrl ? (
-            <div className="st-banner-preview">
-              <img src={coverUrl} alt="Banner" />
-              <button
-                type="button"
-                className="st-banner-x"
-                onClick={async () => {
-                  setCoverUrl("");
-                  await storeApi.update({ cover_url: null });
-                  await refresh();
-                  toast.show("Banner removed");
-                }}
-                aria-label="Remove banner"
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-              </button>
-            </div>
-          ) : (
-            <label className="st-banner-add">
-              {uploadingCover ? (
-                <div className="dash-spinner" />
-              ) : (
-                <>
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-                  <span>Upload banner</span>
-                </>
-              )}
-              <input
-                ref={coverInputRef}
-                type="file"
-                accept="image/*"
-                hidden
-                disabled={uploadingCover}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleUploadCover(file);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-          )}
-        </div>
-      </section>
-
-      {/* Featured product */}
-      <section className="st-panel">
-        <div className="st-panel-head">
-          <h2 className="dash-section-title">Featured product</h2>
-        </div>
-        <div className="st-panel-body">
-          <p className="st-help">
-            Pick one product to feature in your storefront banner. Only one at a
-            time.
-          </p>
-
-          {products.length === 0 ? (
-            <p className="st-help" style={{ opacity: 0.6 }}>
-              No products yet.
-            </p>
-          ) : (
-            <div className="st-featured-list">
-              {products.map((p) => {
-                const active = featuredId === p.id;
-                const img = (p.images && p.images[0]) || p.image_url;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handleSetFeatured(p.id)}
-                    className={`st-featured-item ${active ? "on" : ""}`}
-                  >
-                    <div className="st-featured-thumb">
-                      {img ? <img src={img} alt={p.name} /> : null}
-                    </div>
-                    <div className="st-featured-info">
-                      <p className="st-featured-name">{p.name}</p>
-                      <p className="st-featured-meta">
-                        {p.in_stock ? "In stock" : "Sold out"}
-                      </p>
-                    </div>
-                    {active && (
-                      <span className="st-featured-check">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Public link */}
-      <section className="st-panel">
-        <div className="st-panel-head">
-          <h2 className="dash-section-title">Public link</h2>
-        </div>
-        <div className="st-panel-body">
-          <div className="dash-link-card" style={{ margin: 0 }}>
+        {/* Categorization */}
+        <section className="pd-section">
+          <div className="pd-section-head">
             <div>
-              <p className="dash-link-label">Your store link</p>
-              <p className="dash-link-url">
-                {location.host}/store/<b>{store.slug}</b>
+              <h2 className="dash-section-title">Categorization</h2>
+              <p className="pd-section-sub">
+                Manage categories in the Categories page.
               </p>
             </div>
-            <div className="dash-link-actions">
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(location.origin + "/store/" + store.slug);
-                  toast.show("Link copied");
-                }}
-                className="dash-btn dash-btn-line"
-              >
-                Copy
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => nav("/categories")}
+              className="pd-add-variant"
+            >
+              + Manage
+            </button>
           </div>
-        </div>
-      </section>
+          <div className="pd-fields">
+            <Field label="Category">
+              <select value={categoryId} onChange={(e) => { setCategoryId(e.target.value); if (e.target.value !== "clothing") setSubcategory(""); }} className="pd-input">
+                {categories.length === 0 && <option value="">No categories — add one first</option>}
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+            </Field>
 
-      {/* Danger */}
-      <section className="st-panel st-panel-danger">
-        <div className="st-panel-head">
-          <h2 className="dash-section-title">Danger zone</h2>
-        </div>
-        <div className="st-panel-body">
-          <p className="st-help">
-            Deleting your store removes every product and cancels your plan.
-            This cannot be undone.
-          </p>
-          <button
-            type="button"
-            className="st-danger-btn"
-            onClick={() => toast.show("Contact support to delete your store")}
-          >
-            Delete store
+            {isClothing && (
+              <Field label="Subcategory">
+                <select value={subcategory} onChange={(e) => setSubcategory(e.target.value)} className="pd-input">
+                  <option value="">None</option>
+                  {SUBCATEGORIES.map((s) => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              </Field>
+            )}
+
+            <Field label="Badge">
+              <select value={badge} onChange={(e) => setBadge(e.target.value)} className="pd-input">
+                <option value="">None</option>
+                {BADGES.map((b) => (<option key={b} value={b}>{b}</option>))}
+              </select>
+            </Field>
+          </div>
+        </section>
+
+        {/* Banner */}
+        <section className="pd-section">
+          <h2 className="dash-section-title">Banner</h2>
+          <div className="pd-toggle-row">
+            <div>
+              <p className="pd-toggle-title">Featured in banner</p>
+              <p className="pd-toggle-hint">
+                {isFeatured ? "Shows at the top of your storefront" : "Only one product can be featured"}
+              </p>
+            </div>
+            <button type="button" onClick={() => setIsFeatured(!isFeatured)} className={`pd-toggle ${isFeatured ? "on" : ""}`} aria-label="Toggle featured">
+              <span />
+            </button>
+          </div>
+        </section>
+
+        {/* Stock */}
+        <section className="pd-section">
+          <h2 className="dash-section-title">Stock</h2>
+          <div className="pd-toggle-row">
+            <div>
+              <p className="pd-toggle-title">In stock</p>
+              <p className="pd-toggle-hint">{inStock ? "Available for purchase" : "Hidden from sale"}</p>
+            </div>
+            <button type="button" onClick={() => setInStock(!inStock)} className={`pd-toggle ${inStock ? "on" : ""}`} aria-label="Toggle stock">
+              <span />
+            </button>
+          </div>
+        </section>
+
+        {/* Display order */}
+        <section className="pd-section">
+          <h2 className="dash-section-title">Display order</h2>
+          <div className="pd-fields">
+            <Field label="Sort order" hint="Lower = earlier. Leave empty to use newest.">
+              <input type="number" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} placeholder="e.g. 1, 2, 3…" className="pd-input" />
+            </Field>
+          </div>
+        </section>
+
+        {/* Images */}
+        <section className="pd-section">
+          <div className="pd-section-head">
+            <div>
+              <h2 className="dash-section-title">Images</h2>
+              <p className="pd-section-sub">First image is main. Use arrows to reorder.</p>
+            </div>
+            <p className="pd-count">{allImages.length} / 3</p>
+          </div>
+
+          <div className="pd-images">
+            {allImages.map((url, i) => (
+              <div key={i} className="pd-image">
+                <img src={url} alt="" loading="lazy" decoding="async" />
+                <button type="button" onClick={() => removeImage(i)} className="pd-image-x" aria-label="Remove image">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" width="13" height="13"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                </button>
+                {i === 0 && <span className="pd-image-main">Main</span>}
+                {allImages.length > 1 && (
+                  <div className="pd-image-move">
+                    {i > 0 && (
+                      <button type="button" onClick={() => moveImage(i, -1)} aria-label="Move left">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" width="13" height="13"><path d="M15 18l-6-6 6-6" /></svg>
+                      </button>
+                    )}
+                    {i < allImages.length - 1 && (
+                      <button type="button" onClick={() => moveImage(i, 1)} aria-label="Move right">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" width="13" height="13"><path d="M9 6l6 6-6 6" /></svg>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {canAddMore && (
+              <label className="pd-image-add">
+                {uploading ? (
+                  <div className="dash-spinner" />
+                ) : (
+                  <>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" width="18" height="18"><path d="M12 5v14M5 12h14" /></svg>
+                    <span>Add</span>
+                  </>
+                )}
+                <input type="file" accept="image/*" hidden disabled={uploading} onChange={(e) => { const file = e.target.files?.[0]; if (file) handleImageUpload(file); e.target.value = ""; }} />
+              </label>
+            )}
+          </div>
+        </section>
+
+        {/* Variants */}
+        <section className="pd-section">
+          <div className="pd-section-head">
+            <div>
+              <h2 className="dash-section-title">Variants</h2>
+              <p className="pd-section-sub">Optional. Sizes, shades, or pack options.</p>
+            </div>
+            <button type="button" onClick={addVariant} className="pd-add-variant">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" width="14" height="14"><path d="M12 5v14M5 12h14" /></svg>
+              Add
+            </button>
+          </div>
+
+          {variants.length === 0 ? (
+            <div className="pd-variant-empty">No variants — single price.</div>
+          ) : (
+            <div className="pd-variants">
+              {variants.map((v, i) => (
+                <div key={i} className="pd-variant">
+                  <div className="pd-variant-grid">
+                    <Field label="Label">
+                      <input value={v.label} onChange={(e) => updateVariant(i, { label: e.target.value })} placeholder="e.g. Size M" className="pd-input" />
+                    </Field>
+                    <Field label="+ Price (₦)">
+                      <input type="number" value={v.priceDelta} onChange={(e) => updateVariant(i, { priceDelta: Number(e.target.value) })} placeholder="0" className="pd-input" />
+                    </Field>
+                  </div>
+                  <button type="button" onClick={() => removeVariant(i)} className="pd-remove-variant">Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {error && <p className="pd-error">{error}</p>}
+
+        <div className="pd-actions">
+          {product && (
+            <button type="button" onClick={handleDelete} className="pd-delete">Delete product</button>
+          )}
+          <button type="button" onClick={handleSave} disabled={saving || uploading} className="pd-save">
+            {saving ? "Saving…" : product ? "Save changes" : "Create product"}
           </button>
         </div>
-      </section>
+      </div>
     </DashboardLayout>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="pd-field">
+      <div className="pd-field-label-wrap">
+        <label className="pd-field-label">{label}</label>
+        {hint && <p className="pd-field-hint">{hint}</p>}
+      </div>
+      {children}
+    </div>
   );
 }
