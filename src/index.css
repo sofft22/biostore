@@ -2870,3 +2870,13 @@ textarea.pd-input { resize: vertical; min-height: 68px; }
   .auth-card, .auth-card.in > *, .auth-error { animation: none; opacity: 1; transform: none; }
   .nf-inner { animation: none; opacity: 1; }
 }
+
+.dash-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  animation: slideFromRight 0.55s var(--ease) both;
+}
+.dash-main > * { flex: 0 0 auto; }
