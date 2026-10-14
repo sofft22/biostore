@@ -10,7 +10,7 @@ import Login from "./pages/Login";
 import Overview from "./pages/Overview";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
-import Categories from "./pages/Categories";
+
 import Plan from "./pages/Plan";
 import ProductEdit from "./pages/ProductEdit";
 import Storefront from "./pages/Storefront";
@@ -58,7 +58,7 @@ export default function App() {
             <Route path="/dashboard/product" element={<ProductEdit />} />
             <Route path="/dashboard/product/:id" element={<ProductEdit />} />
 
-            <Route path="/categories" element={<Categories />} />
+           
             <Route path="/settings" element={<Settings />} />
             <Route path="/plan" element={<Plan />} />
 
