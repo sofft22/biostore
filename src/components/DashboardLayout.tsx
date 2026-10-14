@@ -24,12 +24,6 @@ const I = {
       <path d="M3 7l9 4 9-4M12 11v10" />
     </svg>
   ),
-  tag: (
-    <svg className="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 12V4h8l9 9-8 8-9-9z" />
-      <path d="M7.5 8.5h.01" />
-    </svg>
-  ),
   gear: (
     <svg className="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
@@ -57,9 +51,8 @@ const I = {
 };
 
 const NAV = [
-  { to: "/dashboard", label: "Overview", icon: I.grid, end: true },
+  { to: "/dashboard", label: "Home", icon: I.grid, end: true },
   { to: "/dashboard/products", label: "Products", icon: I.box, end: true },
-  { to: "/categories", label: "Categories", icon: I.tag, end: true },
   { to: "/settings", label: "Settings", icon: I.gear, end: false },
   { to: "/plan", label: "Plan", icon: I.bolt, end: true },
 ];
@@ -93,7 +86,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
           <div className="dash-topbar-right">
             {store && (
-              <a href={`/store/${store.slug}`} target="_blank" rel="noopener" className="dash-store-link">
+              <a
+                href={`/store/${store.slug}`}
+                target="_blank"
+                rel="noopener"
+                className="dash-store-link"
+              >
                 <span className="dash-store-dot" />
                 <span className="dash-store-slug">/store/{store.slug}</span>
                 {I.external}
@@ -110,6 +108,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <div className="dash-body">
         <div className="dash-wrap">
           <div className="dash-grid">
+            {/* Desktop sidebar */}
             <aside className="dash-aside">
               <nav className="dash-nav" aria-label="Dashboard">
                 {NAV.map((item) => (
@@ -117,7 +116,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                     key={item.to}
                     to={item.to}
                     end={item.end}
-                    className={({ isActive }) => `dash-nav-item ${isActive ? "active" : ""}`}
+                    className={({ isActive }) =>
+                      `dash-nav-item ${isActive ? "active" : ""}`
+                    }
                   >
                     {item.icon}
                     <span>{item.label}</span>
@@ -126,12 +127,27 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </nav>
             </aside>
 
-            <main className="dash-main">
-              {children}
-            </main>
+            <main className="dash-main">{children}</main>
           </div>
         </div>
       </div>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="dash-tabbar" aria-label="Mobile navigation">
+        {NAV.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) =>
+              `dash-tab ${isActive ? "active" : ""}`
+            }
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }
