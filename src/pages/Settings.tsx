@@ -2,12 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
 import DashboardLayout from "../components/DashboardLayout";
-import { store as storeApi, uploadImage } from "../lib/api";
-import { CATEGORIES } from "../lib/categories";
-import {
-  loadMockCategoryImages,
-  saveMockCategoryImages,
-} from "../lib/mock";
+import { store as storeApi, uploadImage, products as productsApi, store as storeApiFull } from "../lib/api";
+import type { Product } from "../types";
 
 export default function Settings() {
   const { store, refresh } = useAuth();
@@ -20,22 +16,30 @@ export default function Settings() {
   const [tiktok, setTiktok] = useState(store?.tiktok ?? "");
   const [coverUrl, setCoverUrl] = useState(store?.cover_url ?? "");
 
+  const [products, setProducts] = useState<Product[]>([]);
+  const [featuredId, setFeaturedId] = useState<string>("");
+
   const [saving, setSaving] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
-  const [categoryImages, setCategoryImages] = useState<
-    Record<string, string>
-  >({});
-  const [uploadingCat, setUploadingCat] = useState<string | null>(null);
 
   const coverInputRef = useRef<HTMLInputElement | null>(null);
 
-  /* Load category images (mock) */
+  /* Load products to power the featured picker */
   useEffect(() => {
     if (!store?.slug) return;
-    setCategoryImages(loadMockCategoryImages(store.slug));
+    (async () => {
+      try {
+        const data = await storeApiFull.public(store.slug);
+        const list = (data.products as Product[]) ?? [];
+        setProducts(list);
+        const featured = list.find((p) => p.is_featured);
+        setFeaturedId(featured?.id ?? "");
+      } catch {
+        setProducts([]);
+      }
+    })();
   }, [store?.slug]);
 
-  /* Hydrate form from store */
   useEffect(() => {
     if (!store) return;
     setName(store.name);
@@ -81,26 +85,20 @@ export default function Settings() {
     setUploadingCover(false);
   };
 
-  const handleUploadCategory = async (categoryId: string, file: File) => {
-    setUploadingCat(categoryId);
+  const handleSetFeatured = async (productId: string) => {
     try {
-      const url = await uploadImage(file);
-      const next = { ...categoryImages, [categoryId]: url };
-      setCategoryImages(next);
-      saveMockCategoryImages(store.slug, next);
-      toast.show("Category image saved");
+      /* Un-feature all others, then feature this one */
+      for (const p of products) {
+        const shouldBeFeatured = p.id === productId;
+        if (!!p.is_featured !== shouldBeFeatured) {
+          await productsApi.update(p.id, { is_featured: shouldBeFeatured });
+        }
+      }
+      setFeaturedId(productId);
+      toast.show("Banner updated");
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : "Upload failed");
+      toast.show(err instanceof Error ? err.message : "Could not update");
     }
-    setUploadingCat(null);
-  };
-
-  const removeCategoryImage = (categoryId: string) => {
-    const next = { ...categoryImages };
-    delete next[categoryId];
-    setCategoryImages(next);
-    saveMockCategoryImages(store.slug, next);
-    toast.show("Category image removed");
   };
 
   return (
@@ -191,8 +189,8 @@ export default function Settings() {
         </div>
         <div className="st-panel-body">
           <p className="st-help">
-            Used as the featured image on your storefront. Recommended:
-            1600×900.
+            Shown at the top of your storefront when no featured product is
+            picked below.
           </p>
 
           {coverUrl ? (
@@ -209,17 +207,7 @@ export default function Settings() {
                 }}
                 aria-label="Remove banner"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  width="14"
-                  height="14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.9"
-                  strokeLinecap="round"
-                >
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
               </button>
             </div>
           ) : (
@@ -228,17 +216,7 @@ export default function Settings() {
                 <div className="dash-spinner" />
               ) : (
                 <>
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.9"
-                    strokeLinecap="round"
-                  >
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                   <span>Upload banner</span>
                 </>
               )}
@@ -259,83 +237,52 @@ export default function Settings() {
         </div>
       </section>
 
-      {/* Category images */}
+      {/* Featured product */}
       <section className="st-panel">
         <div className="st-panel-head">
-          <h2 className="dash-section-title">Category images</h2>
+          <h2 className="dash-section-title">Featured product</h2>
         </div>
         <div className="st-panel-body">
           <p className="st-help">
-            Upload an image for each category you sell in. These appear as
-            tiles on your storefront.
+            Pick one product to feature in your storefront banner. Only one at a
+            time.
           </p>
 
-          <div className="st-cat-grid">
-            {CATEGORIES.map((c) => {
-              const url = categoryImages[c.id];
-              const busy = uploadingCat === c.id;
-              return (
-                <div key={c.id} className="st-cat-tile">
-                  {url ? (
-                    <>
-                      <img src={url} alt={c.label} />
-                      <button
-                        type="button"
-                        className="st-cat-x"
-                        onClick={() => removeCategoryImage(c.id)}
-                        aria-label="Remove"
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          width="12"
-                          height="12"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                        >
-                          <path d="M6 6l12 12M18 6L6 18" />
-                        </svg>
-                      </button>
-                    </>
-                  ) : (
-                    <label className="st-cat-add">
-                      {busy ? (
-                        <div className="dash-spinner" />
-                      ) : (
-                        <>
-                          <svg
-                            viewBox="0 0 24 24"
-                            width="16"
-                            height="16"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.9"
-                            strokeLinecap="round"
-                          >
-                            <path d="M12 5v14M5 12h14" />
-                          </svg>
-                          <span>Add</span>
-                        </>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        hidden
-                        disabled={busy}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleUploadCategory(c.id, file);
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
-                  )}
-                  <p className="st-cat-label">{c.label}</p>
-                </div>
-              );
-            })}
-          </div>
+          {products.length === 0 ? (
+            <p className="st-help" style={{ opacity: 0.6 }}>
+              No products yet.
+            </p>
+          ) : (
+            <div className="st-featured-list">
+              {products.map((p) => {
+                const active = featuredId === p.id;
+                const img = (p.images && p.images[0]) || p.image_url;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleSetFeatured(p.id)}
+                    className={`st-featured-item ${active ? "on" : ""}`}
+                  >
+                    <div className="st-featured-thumb">
+                      {img ? <img src={img} alt={p.name} /> : null}
+                    </div>
+                    <div className="st-featured-info">
+                      <p className="st-featured-name">{p.name}</p>
+                      <p className="st-featured-meta">
+                        {p.in_stock ? "In stock" : "Sold out"}
+                      </p>
+                    </div>
+                    {active && (
+                      <span className="st-featured-check">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 
@@ -356,9 +303,7 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={() => {
-                  navigator.clipboard.writeText(
-                    location.origin + "/store/" + store.slug
-                  );
+                  navigator.clipboard.writeText(location.origin + "/store/" + store.slug);
                   toast.show("Link copied");
                 }}
                 className="dash-btn dash-btn-line"
