@@ -132,18 +132,23 @@ export const categoryImages = {
 };
 
 /* ══════════════════════════════════════════════════
-   IMAGE UPLOAD
+   IMAGE UPLOAD — sends multipart/form-data to /api/upload
    ══════════════════════════════════════════════════ */
 export async function uploadImage(file: File | Blob): Promise<string> {
+  const form = new FormData();
+  form.append("image", file, (file as File).name || "upload.jpg");
+
   const res = await fetch("/api/upload", {
     method: "POST",
     credentials: "include",
-    headers: { "content-type": file.type || "image/jpeg" },
-    body: file,
+    body: form,
+    // ⚠️ Do NOT set content-type — browser sets multipart boundary itself
   });
+
   const data = (await res.json().catch(() => null)) as
     | { url?: string; error?: string }
     | null;
+
   if (!res.ok || !data || !data.url) {
     throw new ApiError(data?.error || "Upload failed", res.status);
   }
