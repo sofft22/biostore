@@ -265,17 +265,13 @@ export default function Landing() {
             <div className="blob w" />
           </div>
 
-          <div className="wrap relative z-[2]">
-            <div className="hero-grid">
-              <div className="hero-in">
-                <span className="eyebrow">For WhatsApp sellers</span>
-
+        
                 <h1 className="h-hero" style={{ marginTop: 32 }}>
                   Your bio link,<br />but it sells.
                 </h1>
 
                 <p className="lead-xl" style={{ marginTop: 28 }}>
-                  One link for every product. Orders come to your WhatsApp, already written.
+                  perfect product catalog for your bio
                 </p>
 
                 <div style={{ marginTop: 36, display: "flex", gap: 22, alignItems: "center", flexWrap: "wrap" }}>
@@ -285,11 +281,7 @@ export default function Landing() {
                   <a href="#how" className="link">See how it works</a>
                 </div>
 
-                <p style={{ marginTop: 20, fontSize: 13, color: "var(--faint)", fontWeight: 500 }}>
-                  Free to start · Live in two minutes
-                </p>
-              </div>
-
+            
               <div className="scene" ref={sceneRef} role="img" aria-label="A phone showing a biomart catalogue">
                 <div className={`stage ${mounted ? "enter" : ""}`} data-stage>
                   <div className="phone">
