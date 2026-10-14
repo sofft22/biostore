@@ -1,13 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../context/AuthContext";
-import { store as storeApi, products as productsApi } from "../lib/api";
-import { getCategories } from "../lib/storeData";
+import { useToast } from "../components/Toast";
+import {
+  store as storeApi,
+  products as productsApi,
+  uploadImage,
+} from "../lib/api";
+import {
+  getCategoriesWithImages,
+  addCategory,
+  updateCategory,
+  removeCategory,
+  setCategoryImage,
+  removeCategoryImage,
+} from "../lib/storeData";
 import type { Category, Product } from "../types";
 
-const LONG_PRESS_MS = 500;
-type SortKey = "manual" | "newest" | "name" | "price";
+type CatWithImg = Category & { image?: string };
 
 function formatPrice(n: number): string {
   return "₦" + n.toLocaleString("en-NG");
@@ -16,22 +27,29 @@ function formatPrice(n: number): string {
 export default function Dashboard() {
   const nav = useNavigate();
   const { store: currentStore } = useAuth();
+  const toast = useToast();
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<CatWithImg[]>([]);
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("all");
-  const [sort, setSort] = useState<SortKey>("manual");
 
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-  const [pickedId, setPickedId] = useState<string | null>(null);
-  const [pickedOverId, setPickedOverId] = useState<string | null>(null);
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+  const [openCatMenuId, setOpenCatMenuId] = useState<string | null>(null);
+  const [openProductMenuId, setOpenProductMenuId] = useState<string | null>(null);
 
-  const longPressTimer = useRef<number | null>(null);
-  const touchStartY = useRef<number>(0);
-  const listRef = useRef<HTMLDivElement | null>(null);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatImage, setNewCatImage] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    sub: string;
+    actionLabel: string;
+    danger?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
 
   const load = async () => {
     if (!currentStore?.slug) {
@@ -55,366 +73,561 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!currentStore?.slug) return;
-    setCategories(getCategories(currentStore.slug));
+    setCategories(getCategoriesWithImages(currentStore.slug));
   }, [currentStore?.slug]);
 
-  const canReorder = category === "all" && query === "" && sort === "manual";
+  const refreshCategories = () => {
+    if (!currentStore?.slug) return;
+    setCategories(getCategoriesWithImages(currentStore.slug));
+  };
 
-  const filtered = useMemo(() => {
-    let list = [...products];
-    if (category !== "all")
-      list = list.filter((p) => p.category_id === category);
-    if (query) {
-      const q = query.toLowerCase();
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          (p.category_id || "").toLowerCase().includes(q)
-      );
+  const productsByCategory = useMemo(() => {
+    const map: Record<string, Product[]> = {};
+    for (const c of categories) map[c.id] = [];
+    const uncategorized: Product[] = [];
+    for (const p of products) {
+      const cid = (p as any).category_id || (p as any).category;
+      if (cid && map[cid]) map[cid].push(p);
+      else uncategorized.push(p);
     }
-    switch (sort) {
-      case "manual":
-        list.sort((a, b) => {
-          const ao = (a as any).sort_order ?? 999999;
-          const bo = (b as any).sort_order ?? 999999;
-          if (ao !== bo) return ao - bo;
-          return (
-            new Date((b as any).created_at ?? 0).getTime() -
-            new Date((a as any).created_at ?? 0).getTime()
-          );
-        });
-        break;
-      case "name":
-        list.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case "price":
-        list.sort((a, b) => b.price - a.price);
-        break;
-      case "newest":
-        list.sort(
-          (a, b) =>
-            new Date((b as any).created_at ?? 0).getTime() -
-            new Date((a as any).created_at ?? 0).getTime()
-        );
-        break;
-    }
-    return list;
-  }, [products, category, query, sort]);
+    return { map, uncategorized };
+  }, [products, categories]);
 
-  const outOfStockCount = products.filter((p) => !p.in_stock).length;
-
-  const handleSingleDelete = async (p: Product) => {
-    if (!confirm(`Delete "${p.name}"?`)) return;
-    try {
-      await productsApi.remove(p.id);
-      await load();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not delete");
-    }
-  };
-
-  const persistOrder = async (orderedList: Product[]) => {
-    for (let i = 0; i < orderedList.length; i++) {
-      await productsApi.update(orderedList[i].id, {
-        sort_order: i,
-      } as any);
-    }
-  };
-
-  const applyMove = async (fromId: string, toId: string) => {
-    if (!fromId || !toId || fromId === toId) return;
-    if (!canReorder) return;
-
-    const list = [...filtered];
-    const fromIdx = list.findIndex((p) => p.id === fromId);
-    const toIdx = list.findIndex((p) => p.id === toId);
-    if (fromIdx < 0 || toIdx < 0) return;
-
-    const [moved] = list.splice(fromIdx, 1);
-    list.splice(toIdx, 0, moved);
-
-    const reordered = list.map((p, i) => ({
-      ...(p as any),
-      sort_order: i,
-    })) as Product[];
-
-    setProducts(reordered);
-    await persistOrder(reordered);
-  };
-
-  const handleDragStart = (e: React.DragEvent, id: string) => {
-    if (!canReorder) { e.preventDefault(); return; }
-    setDraggingId(id);
-    e.dataTransfer.effectAllowed = "move";
-  };
-  const handleDragOver = (e: React.DragEvent, id: string) => {
-    if (!canReorder) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    if (id !== dragOverId) setDragOverId(id);
-  };
-  const handleDragEnd = () => {
-    if (!canReorder) return;
-    const fromId = draggingId;
-    const toId = dragOverId;
-    setDraggingId(null);
-    setDragOverId(null);
-    if (fromId && toId) applyMove(fromId, toId);
-  };
-
-  const handleTouchStart = (e: React.TouchEvent, id: string) => {
-    if (!canReorder) return;
-    touchStartY.current = e.touches[0].clientY;
-    if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
-    longPressTimer.current = window.setTimeout(() => {
-      setPickedId(id);
-      setPickedOverId(id);
-      if (navigator.vibrate) navigator.vibrate(15);
-    }, LONG_PRESS_MS);
-  };
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!canReorder) return;
-    if (longPressTimer.current && !pickedId) {
-      const dy = Math.abs(e.touches[0].clientY - touchStartY.current);
-      if (dy > 5) {
-        window.clearTimeout(longPressTimer.current);
-        longPressTimer.current = null;
-      }
-    }
-    if (!pickedId) return;
-    e.preventDefault();
-
-    const y = e.touches[0].clientY;
-    const rows = listRef.current?.querySelectorAll("[data-product-id]");
-    if (!rows) return;
-    let targetId: string | null = null;
-    rows.forEach((el) => {
-      const rect = (el as HTMLElement).getBoundingClientRect();
-      if (y >= rect.top && y <= rect.bottom) {
-        targetId = (el as HTMLElement).dataset.productId ?? null;
-      }
+  const toggleOpen = (id: string) => {
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
-    if (targetId && targetId !== pickedOverId) setPickedOverId(targetId);
-  };
-  const handleTouchEnd = () => {
-    if (longPressTimer.current) {
-      window.clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-    if (pickedId && pickedOverId && pickedId !== pickedOverId) {
-      applyMove(pickedId, pickedOverId);
-    }
-    setPickedId(null);
-    setPickedOverId(null);
+    setOpenCatMenuId(null);
+    setOpenProductMenuId(null);
   };
 
-  const categoryTabs = useMemo(
-    () => [
-      { id: "all", label: "All" },
-      ...categories.map((c) => ({ id: c.id, label: c.label })),
-    ],
-    [categories]
-  );
+  const handleAddCategory = () => {
+    if (!currentStore?.slug) return;
+    const result = addCategory(currentStore.slug, newCatName);
+    if (!result.ok) {
+      toast.show(result.error);
+      return;
+    }
+    if (newCatImage && result.category) {
+      setCategoryImage(currentStore.slug, result.category.id, newCatImage);
+    }
+    setAddingCategory(false);
+    setNewCatName("");
+    setNewCatImage(null);
+    refreshCategories();
+    setOpenIds((prev) => new Set(prev).add(result.category.id));
+    toast.show("Category added");
+  };
 
-  const countFor = (id: string) =>
-    id === "all"
-      ? products.length
-      : products.filter((p) => p.category_id === id).length;
+  const handleRename = (id: string) => {
+    if (!currentStore?.slug) return;
+    const result = updateCategory(currentStore.slug, id, renameValue);
+    if (!result.ok) {
+      toast.show(result.error);
+      return;
+    }
+    setRenamingId(null);
+    setRenameValue("");
+    refreshCategories();
+  };
+
+  const handleDeleteCategory = (cat: CatWithImg) => {
+    if (!currentStore?.slug) return;
+    const count = productsByCategory.map[cat.id]?.length ?? 0;
+    setConfirmState({
+      title: `Delete "${cat.label}"?`,
+      sub:
+        count === 0
+          ? "This category is empty. This cannot be undone."
+          : `${count} ${count === 1 ? "product" : "products"} in this category will become uncategorized. This cannot be undone.`,
+      actionLabel: "Delete",
+      danger: true,
+      onConfirm: () => {
+        removeCategory(currentStore.slug, cat.id);
+        refreshCategories();
+        toast.show("Category deleted");
+      },
+    });
+  };
+
+  const handleCategoryImage = async (catId: string, file: File) => {
+    if (!currentStore?.slug) return;
+    try {
+      const url = await uploadImage(file);
+      setCategoryImage(currentStore.slug, catId, url);
+      refreshCategories();
+      toast.show("Image saved");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : "Upload failed");
+    }
+  };
+
+  const handleRemoveCategoryImage = (catId: string) => {
+    if (!currentStore?.slug) return;
+    removeCategoryImage(currentStore.slug, catId);
+    refreshCategories();
+    toast.show("Image removed");
+  };
+
+  const handleDeleteProduct = (p: Product) => {
+    setConfirmState({
+      title: `Delete "${p.name}"?`,
+      sub: "This cannot be undone.",
+      actionLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await productsApi.remove(p.id);
+          await load();
+          toast.show("Product deleted");
+        } catch (err) {
+          toast.show(err instanceof Error ? err.message : "Could not delete");
+        }
+      },
+    });
+  };
+
+  const totalProducts = products.length;
 
   return (
     <DashboardLayout>
-      <section className="dash-head">
+      <section className="dash-head" style={{ padding: 0 }}>
         <p className="dash-head-eyebrow">Catalog</p>
         <h1 className="dash-title">
-          Your <em>products</em>.
+          Your <em>shelves</em>.
         </h1>
         <p className="dash-head-lead">
-          {products.length} total
-          {outOfStockCount > 0 && (
-            <>
-              {" "}
-              ·{" "}
-              <span style={{ color: "var(--green)" }}>
-                {outOfStockCount} out of stock
-              </span>
-            </>
-          )}
+          {totalProducts} {totalProducts === 1 ? "product" : "products"} ·{" "}
+          {categories.length}{" "}
+          {categories.length === 1 ? "category" : "categories"}
         </p>
       </section>
 
-      <section className="pr-filter">
-        <nav className="pr-tabs">
-          {categoryTabs.map((c) => {
-            const active = category === c.id;
-            return (
-              <button
-                key={c.id}
-                onClick={() => setCategory(c.id)}
-                className={`pr-tab ${active ? "active" : ""}`}
-              >
-                {c.label}
-                <span className="pr-tab-count">{countFor(c.id)}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="pr-controls">
-          <div className="pr-search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="7" />
-              <path d="M20 20l-3.5-3.5" />
-            </svg>
-            <input type="text" placeholder="Search…" value={query} onChange={(e) => setQuery(e.target.value)} />
-          </div>
-
-          <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="pr-select">
-            <option value="manual">Custom order</option>
-            <option value="newest">Newest</option>
-            <option value="name">A–Z</option>
-            <option value="price">Price high → low</option>
-          </select>
-
-          <button onClick={() => nav("/dashboard/product")} className="dash-btn dash-btn-dark">
-            + Add product
-          </button>
-        </div>
-      </section>
-
-      <p className={`pr-hint ${canReorder ? "" : "warn"}`}>
-        {canReorder
-          ? "Long-press or drag to reorder"
-          : "Clear filters and set sort to Custom order to reorder"}
-      </p>
-
       {loading ? (
-        <div className="dash-loading-inline"><div className="dash-spinner" /></div>
-      ) : filtered.length === 0 ? (
-        <div className="dash-empty">
-          <div className="dash-empty-icon">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 8h14l-1 12H6L5 8z" /><path d="M9 8V6a3 3 0 0 1 6 0v2" />
-            </svg>
-          </div>
-          <p className="dash-empty-title">
-            {products.length === 0 ? "No products yet" : "No products match"}
-          </p>
-          <p className="dash-empty-sub">
-            {products.length === 0 ? "Add your first one — it takes 30 seconds." : "Try a different search or category."}
-          </p>
-          {products.length === 0 && (
-            <button onClick={() => nav("/dashboard/product")} className="dash-btn dash-btn-dark" style={{ marginTop: 20 }}>
-              + Add your first product
-            </button>
-          )}
+        <div className="dash-loading-inline">
+          <div className="dash-spinner" />
         </div>
       ) : (
         <>
-          <ul className="pr-list">
-            {filtered.map((p) => {
-              const isDragging = draggingId === p.id;
-              const isDragOver = dragOverId === p.id;
-              const variantCount = p.variants?.suggested?.length ?? 0;
-              const catLabel =
-                categories.find((c) => c.id === p.category_id)?.label ??
-                p.category_id;
-              return (
-                <li
-                  key={p.id}
-                  draggable={canReorder}
-                  onDragStart={(e) => handleDragStart(e, p.id)}
-                  onDragOver={(e) => handleDragOver(e, p.id)}
-                  onDragEnd={handleDragEnd}
-                  onDrop={(e) => e.preventDefault()}
-                  className={`pr-row ${isDragOver ? "over" : ""} ${isDragging ? "dragging" : ""}`}
-                >
-                  <span className="pr-handle" aria-label="Drag to reorder">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" />
-                      <circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" />
-                      <circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" />
-                    </svg>
-                  </span>
+          {categories.length === 0 && !addingCategory && (
+            <div className="cat-welcome">
+              <div className="cat-welcome-icon">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 7l9-4 9 4v10l-9 4-9-4V7z" />
+                  <path d="M3 7l9 4 9-4M12 11v10" />
+                </svg>
+              </div>
+              <h2>Start with a category</h2>
+              <p>
+                A <b>category</b> is a group of products — like <b>Bags</b>,{" "}
+                <b>Shoes</b> or <b>Skincare</b>. Create one below, then add
+                products inside it.
+              </p>
+            </div>
+          )}
 
-                  <button onClick={() => nav(`/dashboard/product/${p.id}`)} className="pr-body">
-                    <div className="pr-thumb">
-                      {p.image_url && <img src={p.image_url} alt={p.name} loading="lazy" decoding="async" />}
-                    </div>
-                    <div className="pr-info">
-                      <p className="pr-name">
-                        {p.name}
-                        {p.is_featured && <span className="pr-featured-tag">Featured</span>}
-                      </p>
-                      <p className="pr-meta">
-                        <span className="pr-cat">{catLabel}</span>
-                        {variantCount > 0 && ` · ${variantCount} variant${variantCount === 1 ? "" : "s"}`}
-                        {p.badge && ` · ${p.badge}`}
-                      </p>
-                    </div>
-                  </button>
+          {categories.map((cat) => {
+            const list = productsByCategory.map[cat.id] ?? [];
+            const isOpen = openIds.has(cat.id);
+            const isRenaming = renamingId === cat.id;
+            const count = list.length;
 
-                  <div className="pr-price">{formatPrice(p.price)}</div>
+            return (
+              <div key={cat.id} className={`cat ${isOpen ? "open" : ""}`}>
+                <div className="cat-head">
+                  <button
+                    className="cat-open-btn"
+                    type="button"
+                    onClick={() => toggleOpen(cat.id)}
+                    aria-expanded={isOpen}
+                  >
+                    <label
+                      className="cat-thumb"
+                      onClick={(e) => e.stopPropagation()}
+                      title={cat.image ? "Change photo" : "Add photo"}
+                    >
+                      {cat.image ? (
+                        <img src={cat.image} alt={cat.label} />
+                      ) : (
+                        <div className="cat-thumb-ph">
+                          {cat.label[0]?.toUpperCase()}
+                        </div>
+                      )}
+                      <div className="cat-thumb-hint">
+                        <span>
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 7l9-4 9 4v10l-9 4-9-4V7z" />
+                            <path d="M3 7l9 4 9-4M12 11v10" />
+                          </svg>
+                          {cat.image ? "Change" : "Add photo"}
+                        </span>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleCategoryImage(cat.id, file);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
 
-                  <div className="pr-stock">
-                    <span className={`pr-dot ${p.in_stock ? "in" : "out"}`} />
-                    <span className={`pr-stock-label ${p.in_stock ? "in" : "out"}`}>
-                      {p.in_stock ? "In stock" : "Sold out"}
-                    </span>
-                  </div>
-
-                  <div className="pr-actions">
-                    <button onClick={() => nav(`/dashboard/product/${p.id}`)} className="pr-action">Edit</button>
-                    <button onClick={() => handleSingleDelete(p)} className="pr-action-del" aria-label="Delete">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                      </svg>
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-
-          <div ref={listRef} className="pr-list-mobile">
-            {filtered.map((p) => {
-              const isPicked = pickedId === p.id;
-              const isPickedOver = pickedOverId === p.id && pickedId && pickedId !== p.id;
-              const catLabel = categories.find((c) => c.id === p.category_id)?.label ?? p.category_id;
-              return (
-                <div
-                  key={p.id}
-                  data-product-id={p.id}
-                  onTouchStart={(e) => handleTouchStart(e, p.id)}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
-                  className={`pr-row-m ${isPicked ? "picked" : ""} ${isPickedOver ? "over" : ""}`}
-                >
-                  <button onClick={() => !isPicked && nav(`/dashboard/product/${p.id}`)} className="pr-body">
-                    <div className="pr-thumb">
-                      {p.image_url && <img src={p.image_url} alt={p.name} loading="lazy" decoding="async" />}
-                    </div>
-                    <div className="pr-info">
-                      <p className="pr-name">
-                        {p.name}
-                        {p.is_featured && <span className="pr-featured-tag">Featured</span>}
-                      </p>
-                      <p className="pr-meta">
-                        <span className="pr-cat">{catLabel}</span>
-                        {p.in_stock === false && " · Sold out"}
+                    <div className="cat-info">
+                      {isRenaming ? (
+                        <input
+                          className="cat-rename-input"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleRename(cat.id);
+                            if (e.key === "Escape") setRenamingId(null);
+                          }}
+                          autoFocus
+                        />
+                      ) : (
+                        <p className="cat-name">{cat.label}</p>
+                      )}
+                      <p className="cat-meta">
+                        {count === 0
+                          ? "Empty — open to add your first product"
+                          : `${count} ${count === 1 ? "product" : "products"}`}
                       </p>
                     </div>
                   </button>
-                  <div className="pr-price-m">
-                    <p>{formatPrice(p.price)}</p>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 6l6 6-6 6" />
-                    </svg>
-                  </div>
+
+                  {!isRenaming && (
+                    <>
+                      <button
+                        className="cat-chev"
+                        type="button"
+                        onClick={() => toggleOpen(cat.id)}
+                        aria-label="Toggle category"
+                      >
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 6l6 6-6 6" />
+                        </svg>
+                      </button>
+
+                      <div className="cat-menu-wrap">
+                        <button
+                          className="cat-menu-btn"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenCatMenuId(
+                              openCatMenuId === cat.id ? null : cat.id
+                            );
+                            setOpenProductMenuId(null);
+                          }}
+                          aria-label="More options"
+                        >
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <circle cx="5" cy="12" r="1.6" />
+                            <circle cx="12" cy="12" r="1.6" />
+                            <circle cx="19" cy="12" r="1.6" />
+                          </svg>
+                        </button>
+                        {openCatMenuId === cat.id && (
+                          <div className="cat-menu on">
+                            <button
+                              className="cat-menu-item"
+                              type="button"
+                              onClick={() => {
+                                setRenamingId(cat.id);
+                                setRenameValue(cat.label);
+                                setOpenCatMenuId(null);
+                              }}
+                            >
+                              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                              </svg>
+                              Rename
+                            </button>
+                            {cat.image && (
+                              <button
+                                className="cat-menu-item"
+                                type="button"
+                                onClick={() => {
+                                  handleRemoveCategoryImage(cat.id);
+                                  setOpenCatMenuId(null);
+                                }}
+                              >
+                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                                  <circle cx="9" cy="9" r="2" />
+                                  <path d="M21 15l-5-5L5 21" />
+                                </svg>
+                                Remove photo
+                              </button>
+                            )}
+                            <button
+                              className="cat-menu-item danger"
+                              type="button"
+                              onClick={() => {
+                                handleDeleteCategory(cat);
+                                setOpenCatMenuId(null);
+                              }}
+                            >
+                              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                              </svg>
+                              Delete category
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {isRenaming && (
+                    <>
+                      <button
+                        className="btn-sm save"
+                        type="button"
+                        onClick={() => handleRename(cat.id)}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="btn-sm cancel"
+                        type="button"
+                        onClick={() => setRenamingId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
                 </div>
-              );
-            })}
-          </div>
+
+                {isOpen && !isRenaming && (
+                  <div className="cat-body">
+                    {count === 0 ? (
+                      <div className="cat-empty">
+                        <p className="cat-empty-title">
+                          No products in {cat.label} yet
+                        </p>
+                        <p className="cat-empty-sub">
+                          Add your first one — it takes 30 seconds.
+                        </p>
+                        <button
+                          className="add-first"
+                          type="button"
+                          onClick={() => nav(`/dashboard/product?category=${cat.id}`)}
+                        >
+                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                          Add first product
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="prod-grid">
+                        {list.map((p) => (
+                          <div key={p.id} className="prod-wrap">
+                            <button
+                              className="prod"
+                              type="button"
+                              onClick={() => nav(`/dashboard/product/${p.id}`)}
+                            >
+                              <div className="prod-img">
+                                {p.image_url ? (
+                                  <img src={p.image_url} alt={p.name} loading="lazy" decoding="async" />
+                                ) : (
+                                  <div className="prod-img-ph">
+                                    {p.name[0]?.toUpperCase()}
+                                  </div>
+                                )}
+                                <span className={`prod-stock ${p.in_stock ? "" : "out"}`}>
+                                  {p.in_stock ? "In stock" : "Sold out"}
+                                </span>
+                                <div className="prod-hover">Click to edit</div>
+                              </div>
+                              <div className="prod-body">
+                                <p className="prod-name">{p.name}</p>
+                                <p className="prod-price">{formatPrice(p.price)}</p>
+                              </div>
+                            </button>
+
+                            <button
+                              className="prod-menu-btn"
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenProductMenuId(
+                                  openProductMenuId === p.id ? null : p.id
+                                );
+                                setOpenCatMenuId(null);
+                              }}
+                              aria-label="More options"
+                            >
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                                <circle cx="5" cy="12" r="1.6" />
+                                <circle cx="12" cy="12" r="1.6" />
+                                <circle cx="19" cy="12" r="1.6" />
+                              </svg>
+                            </button>
+
+                            {openProductMenuId === p.id && (
+                              <div className="prod-menu on">
+                                <button
+                                  className="prod-menu-item"
+                                  type="button"
+                                  onClick={() => nav(`/dashboard/product/${p.id}`)}
+                                >
+                                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M12 20h9" />
+                                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                                  </svg>
+                                  Edit product
+                                </button>
+                                <button
+                                  className="prod-menu-item danger"
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenProductMenuId(null);
+                                    handleDeleteProduct(p);
+                                  }}
+                                >
+                                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                  </svg>
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        <button
+                          className="prod-add"
+                          type="button"
+                          onClick={() => nav(`/dashboard/product?category=${cat.id}`)}
+                        >
+                          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                          Add product
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {addingCategory ? (
+            <div className="cat-form">
+              <div className="cat-form-row">
+                <label className="cat-form-photo" title="Add photo">
+                  {newCatImage ? (
+                    <img src={newCatImage} alt="" />
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () =>
+                        setNewCatImage(String(reader.result));
+                      reader.readAsDataURL(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <input
+                  className="cat-form-input"
+                  placeholder="Category name — e.g. Bags"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddCategory();
+                  }}
+                  autoFocus
+                />
+              </div>
+              <div className="cat-form-actions">
+                <button
+                  className="btn-sm cancel"
+                  type="button"
+                  onClick={() => {
+                    setAddingCategory(false);
+                    setNewCatName("");
+                    setNewCatImage(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-sm save"
+                  type="button"
+                  disabled={!newCatName.trim()}
+                  onClick={handleAddCategory}
+                >
+                  Create
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              className="cat-new"
+              type="button"
+              onClick={() => setAddingCategory(true)}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              New category
+            </button>
+          )}
         </>
+      )}
+
+      {confirmState && (
+        <div
+          className="confirm-backdrop on"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmState(null);
+          }}
+        >
+          <div className="confirm">
+            <h3 className="confirm-title">{confirmState.title}</h3>
+            <p className="confirm-sub">{confirmState.sub}</p>
+            <div className="confirm-actions">
+              <button
+                className="confirm-btn ghost"
+                type="button"
+                onClick={() => setConfirmState(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className={`confirm-btn ${confirmState.danger ? "danger" : ""}`}
+                type="button"
+                onClick={() => {
+                  confirmState.onConfirm();
+                  setConfirmState(null);
+                }}
+              >
+                {confirmState.actionLabel}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </DashboardLayout>
   );
