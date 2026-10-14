@@ -2884,3 +2884,8 @@ textarea.pd-input { resize: vertical; min-height: 68px; }
   animation: slideFromRight 0.55s var(--ease) both;
 }
 .dash-main > * { flex: 0 0 auto; }
+
+/* Dashboard pages use <section> tags — undo the global section padding */
+.dash-main section {
+  padding: 0;
+}
