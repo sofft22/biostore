@@ -26,8 +26,16 @@ export const onRequestPost: PagesFunction<{ IMGBB_KEY: string }> = async ({ env,
     });
 
     const json = await res.json() as any;
+
     if (!json?.success) {
-      return Response.json({ error: "Upload failed", detail: json }, { status: 502 });
+      const imgbbMsg =
+        json?.error?.message ||
+        json?.status_txt ||
+        "Upload failed";
+      return Response.json(
+        { error: imgbbMsg, detail: json },
+        { status: 502 }
+      );
     }
 
     return Response.json({
