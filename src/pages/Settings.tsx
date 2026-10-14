@@ -1,10 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
 import DashboardLayout from "../components/DashboardLayout";
 import {
   store as storeApi,
-  uploadImage,
   products as productsApi,
 } from "../lib/api";
 import type { Product } from "../types";
@@ -18,15 +17,11 @@ export default function Settings() {
   const [whatsapp, setWhatsapp] = useState(store?.whatsapp ?? "");
   const [instagram, setInstagram] = useState(store?.instagram ?? "");
   const [tiktok, setTiktok] = useState(store?.tiktok ?? "");
-  const [coverUrl, setCoverUrl] = useState(store?.cover_url ?? "");
 
   const [products, setProducts] = useState<Product[]>([]);
   const [featuredId, setFeaturedId] = useState<string>("");
 
   const [saving, setSaving] = useState(false);
-  const [uploadingCover, setUploadingCover] = useState(false);
-
-  const coverInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!store?.slug) return;
@@ -50,7 +45,6 @@ export default function Settings() {
     setWhatsapp(store.whatsapp);
     setInstagram(store.instagram ?? "");
     setTiktok(store.tiktok ?? "");
-    setCoverUrl(store.cover_url ?? "");
   }, [store]);
 
   if (!store) return null;
@@ -64,7 +58,6 @@ export default function Settings() {
         whatsapp: whatsapp.trim(),
         instagram: instagram.trim() || null,
         tiktok: tiktok.trim() || null,
-        cover_url: coverUrl || null,
       });
       await refresh();
       toast.show("Store saved");
@@ -72,20 +65,6 @@ export default function Settings() {
       toast.show(err instanceof Error ? err.message : "Could not save");
     }
     setSaving(false);
-  };
-
-  const handleUploadCover = async (file: File) => {
-    setUploadingCover(true);
-    try {
-      const url = await uploadImage(file);
-      setCoverUrl(url);
-      await storeApi.update({ cover_url: url });
-      await refresh();
-      toast.show("Banner updated");
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : "Upload failed");
-    }
-    setUploadingCover(false);
   };
 
   const handleSetFeatured = async (productId: string) => {
@@ -145,58 +124,6 @@ export default function Settings() {
           <button onClick={handleSaveStore} disabled={saving} className="st-save">
             {saving ? "Saving…" : "Save changes"}
           </button>
-        </div>
-      </section>
-
-      <section className="st-panel">
-        <div className="st-panel-head">
-          <h2 className="dash-section-title">Banner image</h2>
-        </div>
-        <div className="st-panel-body">
-          <p className="st-help">
-            Shown at the top of your storefront when no featured product is picked below.
-          </p>
-          {coverUrl ? (
-            <div className="st-banner-preview">
-              <img src={coverUrl} alt="Banner" />
-              <button
-                type="button"
-                className="st-banner-x"
-                onClick={async () => {
-                  setCoverUrl("");
-                  await storeApi.update({ cover_url: null });
-                  await refresh();
-                  toast.show("Banner removed");
-                }}
-                aria-label="Remove banner"
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-              </button>
-            </div>
-          ) : (
-            <label className="st-banner-add">
-              {uploadingCover ? (
-                <div className="dash-spinner" />
-              ) : (
-                <>
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-                  <span>Upload banner</span>
-                </>
-              )}
-              <input
-                ref={coverInputRef}
-                type="file"
-                accept="image/*"
-                hidden
-                disabled={uploadingCover}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleUploadCover(file);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-          )}
         </div>
       </section>
 
