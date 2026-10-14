@@ -1,0 +1,11 @@
+name = "biostore"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "dist"
+
+[functions]
+directory = "functions"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "biostore"
+database_id = "a2abc1eb-fca6-4a6f-bb24-e4cf4f0737e6"
