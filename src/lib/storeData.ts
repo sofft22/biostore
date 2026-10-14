@@ -134,3 +134,13 @@ export function removeCategoryImage(
   delete images[categoryId];
   saveCategoryImages(storeSlug, images);
 }
+
+/* ── COMBINED (new) ── */
+
+export function getCategoriesWithImages(
+  storeSlug: string
+): Array<Category & { image?: string }> {
+  const cats = getCategories(storeSlug);
+  const images = getCategoryImages(storeSlug);
+  return cats.map((c) => ({ ...c, image: images[c.id] }));
+}
