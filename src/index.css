@@ -1802,53 +1802,83 @@ textarea.pd-input { resize: vertical; min-height: 68px; }
   color: var(--ink);
   box-shadow: 0 1px 0 var(--line);
 }
+
 .sf-head-inner {
-  max-width: 1200px; margin: 0 auto;
-  padding: 0 16px; height: 64px;
-  display: flex; align-items: center; gap: 12px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 @media (min-width: 700px) {
-  .sf-head-inner { height: 76px; padding: 0 32px; gap: 20px; }
+  .sf-head-inner {
+    height: 76px;
+    padding: 0 32px;
+    gap: 20px;
+  }
 }
 
-/* ─── Wordmark (brand) ─── */
+/* ─── Wordmark (brand) — two-tone, all caps, wide tracking ─── */
 .sf-wordmark {
   display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-family: var(--serif);
-  font-size: 22px;
-  font-weight: 400;
-  letter-spacing: -0.01em;
+  align-items: baseline;
+  font-family: var(--font);
+  font-size: 18px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1;
+  padding-left: 0.14em;            /* balances trailing letter-spacing */
   color: inherit;
   background: transparent;
-  border: 0; padding: 0;
+  border: 0;
   cursor: pointer;
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35);
   transition: text-shadow 0.2s ease;
   max-width: 60%;
   min-width: 0;
+  white-space: nowrap;
 }
 @media (min-width: 700px) {
-  .sf-wordmark { font-size: 26px; max-width: none; }
+  .sf-wordmark {
+    font-size: 20px;
+    max-width: none;
+  }
 }
-.sf-head-solid .sf-wordmark { text-shadow: none; }
+.sf-head-solid .sf-wordmark {
+  text-shadow: none;
+}
 
-.sf-wordmark-icon {
-  width: 22px;
-  height: 24px;
-  flex: none;
+/* Word 1 — bold, full opacity */
+.sf-wordmark-1 {
+  font-weight: 800;
+  color: inherit;
+}
+
+/* Word 2 — thin, muted */
+.sf-wordmark-2 {
+  font-weight: 200;
+  margin-left: 0.5em;
+  opacity: 0.72;
+  color: inherit;
+}
+
+/* Dot — bold, brand green */
+.sf-wordmark-dot {
+  font-weight: 800;
   color: var(--green);
 }
-@media (min-width: 700px) {
-  .sf-wordmark-icon { width: 24px; height: 26px; }
-}
-.sf-head:not(.sf-head-solid) .sf-wordmark-icon { color: #fff; }
 
-.sf-wordmark > span {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* On banner (transparent header) — everything goes white */
+.sf-head:not(.sf-head-solid) .sf-wordmark-1 {
+  color: #fff;
+}
+.sf-head:not(.sf-head-solid) .sf-wordmark-2 {
+  color: rgba(255, 255, 255, 0.78);
+}
+.sf-head:not(.sf-head-solid) .sf-wordmark-dot {
+  color: #fff;
 }
 
 /* ─── Banner with darker overlay for readability ─── */
