@@ -5,9 +5,7 @@ export const onRequestGet: PagesFunction<{ DB: D1Database }> = async ({ env, par
     "SELECT id, slug, name, bio, tagline, address, whatsapp, instagram, tiktok, cover_url FROM stores WHERE slug = ?"
   ).bind(slug).first();
 
-  if (!store) {
-    return Response.json({ error: "Store not found" }, { status: 404 });
-  }
+  if (!store) return Response.json({ error: "Store not found" }, { status: 404 });
 
   const { results } = await env.DB.prepare(
     "SELECT id, name, price, compare_at_price, description, category, subcategory, badge, in_stock, images, variants, created_at FROM products WHERE store_id = ? ORDER BY created_at DESC"
