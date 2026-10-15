@@ -23,22 +23,19 @@ export default function Settings() {
   const { store, refresh } = useAuth();
   const toast = useToast();
 
-  /* ── store fields ── */
   const [name, setName] = useState(store?.name ?? "");
   const [bio, setBio] = useState(store?.bio ?? "");
+  const [tagline, setTagline] = useState((store as any)?.tagline ?? "");
+  const [address, setAddress] = useState((store as any)?.address ?? "");
   const [whatsapp, setWhatsapp] = useState(store?.whatsapp ?? "");
   const [instagram, setInstagram] = useState(store?.instagram ?? "");
   const [tiktok, setTiktok] = useState(store?.tiktok ?? "");
   const [saving, setSaving] = useState(false);
 
-  /* ── banner ── */
-  const [bannerUrl, setBannerUrl] = useState<string>(
-    (store as any)?.cover_url ?? ""
-  );
+  const [bannerUrl, setBannerUrl] = useState<string>((store as any)?.cover_url ?? "");
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const bannerInputRef = useRef<HTMLInputElement | null>(null);
 
-  /* ── categories ── */
   const [categories, setCategories] = useState<CatWithImg[]>([]);
   const [newCatName, setNewCatName] = useState("");
   const [newCatImage, setNewCatImage] = useState<string | null>(null);
@@ -58,9 +55,11 @@ export default function Settings() {
 
   useEffect(() => {
     if (!store) return;
-    setName(store.name);
+    setName(store.name ?? "");
     setBio(store.bio ?? "");
-    setWhatsapp(store.whatsapp);
+    setTagline((store as any).tagline ?? "");
+    setAddress((store as any).address ?? "");
+    setWhatsapp(store.whatsapp ?? "");
     setInstagram(store.instagram ?? "");
     setTiktok(store.tiktok ?? "");
     setBannerUrl((store as any).cover_url ?? "");
@@ -68,17 +67,18 @@ export default function Settings() {
 
   if (!store) return null;
 
-  /* ── store save ── */
   const handleSaveStore = async () => {
     setSaving(true);
     try {
       await storeApi.update({
         name: name.trim(),
         bio: bio.trim() || null,
+        tagline: tagline.trim() || null,
+        address: address.trim() || null,
         whatsapp: whatsapp.trim(),
         instagram: instagram.trim() || null,
         tiktok: tiktok.trim() || null,
-      });
+      } as any);
       await refresh();
       toast.show("Store saved");
     } catch (err) {
@@ -87,7 +87,6 @@ export default function Settings() {
     setSaving(false);
   };
 
-  /* ── banner handlers ── */
   const handleUploadBanner = async (file: File) => {
     setUploadingBanner(true);
     try {
@@ -113,7 +112,6 @@ export default function Settings() {
     }
   };
 
-  /* ── category handlers ── */
   const handleAddCategory = async () => {
     const result = addCategory(store.slug, newCatName);
     if (!result.ok) { toast.show(result.error); return; }
@@ -121,9 +119,7 @@ export default function Settings() {
       try {
         const url = await uploadImage(dataUrlToBlob(newCatImage));
         setCategoryImage(store.slug, result.category.id, url);
-      } catch {
-        /* non-fatal */
-      }
+      } catch {}
     }
     setNewCatName("");
     setNewCatImage(null);
@@ -170,13 +166,11 @@ export default function Settings() {
     <DashboardLayout>
       <section className="dash-head" style={{ padding: 0 }}>
         <p className="dash-head-eyebrow">Settings</p>
-        <h1 className="dash-title">
-          Your <em>store</em>.
-        </h1>
+        <h1 className="dash-title">Your <em>store</em>.</h1>
         <p className="dash-head-lead">These appear on your public storefront.</p>
       </section>
 
-      {/* ── STORE PROFILE ── */}
+      {/* STORE PROFILE */}
       <section className="st-panel">
         <div className="st-panel-head">
           <h2 className="dash-section-title">Store profile</h2>
@@ -184,11 +178,21 @@ export default function Settings() {
         <div className="st-panel-body">
           <div className="st-field">
             <label className="st-label">Store name</label>
-            <input className="st-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
+            <input className="st-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} placeholder="Adaeze's Closet" />
+          </div>
+          <div className="st-field">
+            <label className="st-label">Tagline</label>
+            <input className="st-input" value={tagline} onChange={(e) => setTagline(e.target.value)} placeholder="Where Lagos style meets everyday luxury" maxLength={100} />
+            <p className="st-help">Short sentence shown on the banner.</p>
           </div>
           <div className="st-field">
             <label className="st-label">Bio</label>
             <textarea className="st-input st-textarea" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Bags, shoes and skincare · Lagos" rows={2} />
+          </div>
+          <div className="st-field">
+            <label className="st-label">Address</label>
+            <input className="st-input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="12 Admiralty Way, Lekki, Lagos" />
+            <p className="st-help">Shown in the footer Contact section.</p>
           </div>
           <div className="st-field">
             <label className="st-label">WhatsApp number</label>
@@ -210,28 +214,18 @@ export default function Settings() {
         </div>
       </section>
 
-      {/* ── BANNER IMAGE ── */}
+      {/* BANNER */}
       <section className="st-panel">
         <div className="st-panel-head">
           <h2 className="dash-section-title">Banner image</h2>
         </div>
         <div className="st-panel-body">
-          <p className="st-help">
-            Shown at the top of your storefront. Wide landscape photos work best.
-          </p>
-
+          <p className="st-help">Shown at the top of your storefront. Wide landscape works best.</p>
           {bannerUrl ? (
             <div className="st-banner-preview">
               <img src={bannerUrl} alt="Banner" />
-              <button
-                type="button"
-                className="st-banner-x"
-                onClick={handleRemoveBanner}
-                aria-label="Remove banner"
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
+              <button type="button" className="st-banner-x" onClick={handleRemoveBanner} aria-label="Remove banner">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
               </button>
             </div>
           ) : (
@@ -240,101 +234,52 @@ export default function Settings() {
                 <div className="dash-spinner" />
               ) : (
                 <>
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                   <span>Upload banner</span>
                 </>
               )}
-              <input
-                ref={bannerInputRef}
-                type="file"
-                accept="image/*"
-                hidden
-                disabled={uploadingBanner}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleUploadBanner(file);
-                  e.target.value = "";
-                }}
-              />
+              <input ref={bannerInputRef} type="file" accept="image/*" hidden disabled={uploadingBanner}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadBanner(f); e.target.value = ""; }} />
             </label>
           )}
-
           {bannerUrl && (
             <label className="btn-sm save" style={{ display: "inline-flex", cursor: "pointer", alignItems: "center", gap: 8 }}>
               {uploadingBanner ? "Uploading…" : "Change banner"}
-              <input
-                type="file"
-                accept="image/*"
-                hidden
-                disabled={uploadingBanner}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleUploadBanner(file);
-                  e.target.value = "";
-                }}
-              />
+              <input type="file" accept="image/*" hidden disabled={uploadingBanner}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadBanner(f); e.target.value = ""; }} />
             </label>
           )}
         </div>
       </section>
 
-      {/* ── CATEGORIES ── */}
+      {/* CATEGORIES */}
       <section className="st-panel">
         <div className="st-panel-head">
           <h2 className="dash-section-title">Categories</h2>
         </div>
         <div className="st-panel-body">
-          <p className="st-help">
-            Group your products so customers find what they want. Add an image to make a category stand out.
-          </p>
-
-          {/* Add new */}
+          <p className="st-help">Group your products so customers can find them faster.</p>
           <div className="cat-form">
             <div className="cat-form-row">
               <label className="cat-form-photo" title="Add photo">
-                {newCatImage ? (
-                  <img src={newCatImage} alt="" />
-                ) : (
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
+                {newCatImage ? <img src={newCatImage} alt="" /> : (
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                 )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => setNewCatImage(String(reader.result));
-                    reader.readAsDataURL(file);
-                    e.target.value = "";
-                  }}
-                />
+                <input type="file" accept="image/*" hidden onChange={(e) => {
+                  const f = e.target.files?.[0]; if (!f) return;
+                  const r = new FileReader();
+                  r.onload = () => setNewCatImage(String(r.result));
+                  r.readAsDataURL(f);
+                  e.target.value = "";
+                }} />
               </label>
-              <input
-                className="cat-form-input"
-                placeholder="New category name (e.g. Wigs)"
-                value={newCatName}
+              <input className="cat-form-input" placeholder="New category name (e.g. Wigs)" value={newCatName}
                 onChange={(e) => setNewCatName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleAddCategory(); }}
-                maxLength={30}
-              />
-              <button
-                className="btn-sm save"
-                type="button"
-                disabled={!newCatName.trim()}
-                onClick={handleAddCategory}
-              >
-                Add
-              </button>
+                onKeyDown={(e) => { if (e.key === "Enter") handleAddCategory(); }} maxLength={30} />
+              <button className="btn-sm save" type="button" disabled={!newCatName.trim()} onClick={handleAddCategory}>Add</button>
             </div>
           </div>
 
-          {/* List */}
           {categories.length === 0 ? (
             <p className="st-help" style={{ opacity: 0.6 }}>No categories yet.</p>
           ) : (
@@ -348,58 +293,28 @@ export default function Settings() {
                       {c.image ? (
                         <>
                           <img src={c.image} alt={c.label} />
-                          <button
-                            type="button"
-                            className="cat-row-img-x"
-                            onClick={() => handleRemoveCategoryImage(c.id)}
-                            aria-label="Remove image"
-                          >
-                            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                              <path d="M6 6l12 12M18 6L6 18" />
-                            </svg>
+                          <button type="button" className="cat-row-img-x" onClick={() => handleRemoveCategoryImage(c.id)} aria-label="Remove image">
+                            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
                           </button>
                         </>
                       ) : (
                         <label className="cat-row-img-add">
-                          {busy ? (
-                            <div className="dash-spinner" />
-                          ) : (
-                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
-                              <path d="M12 5v14M5 12h14" />
-                            </svg>
+                          {busy ? <div className="dash-spinner" /> : (
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                           )}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            hidden
-                            disabled={busy}
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleCategoryImage(c.id, file);
-                              e.target.value = "";
-                            }}
-                          />
+                          <input type="file" accept="image/*" hidden disabled={busy}
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleCategoryImage(c.id, f); e.target.value = ""; }} />
                         </label>
                       )}
                     </div>
-
                     <div className="cat-row-name">
                       {isEditing ? (
-                        <input
-                          className="cat-row-input"
-                          value={editingName}
-                          onChange={(e) => setEditingName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleRename(c.id);
-                            if (e.key === "Escape") { setEditingId(null); setEditingName(""); }
-                          }}
-                          autoFocus
-                        />
+                        <input className="cat-row-input" value={editingName} onChange={(e) => setEditingName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") handleRename(c.id); if (e.key === "Escape") { setEditingId(null); setEditingName(""); } }} autoFocus />
                       ) : (
                         <p className="cat-row-label">{c.label}</p>
                       )}
                     </div>
-
                     <div className="cat-row-actions">
                       {isEditing ? (
                         <>
@@ -421,7 +336,7 @@ export default function Settings() {
         </div>
       </section>
 
-      {/* ── PUBLIC LINK ── */}
+      {/* PUBLIC LINK */}
       <section className="st-panel">
         <div className="st-panel-head">
           <h2 className="dash-section-title">Public link</h2>
@@ -430,57 +345,30 @@ export default function Settings() {
           <div className="dash-link-card" style={{ margin: 0 }}>
             <div>
               <p className="dash-link-label">Your store link</p>
-              <p className="dash-link-url">
-                {location.host}/store/<b>{store.slug}</b>
-              </p>
+              <p className="dash-link-url">{location.host}/store/<b>{store.slug}</b></p>
             </div>
             <div className="dash-link-actions">
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(location.origin + "/store/" + store.slug);
-                  toast.show("Link copied");
-                }}
-                className="dash-btn dash-btn-line"
-              >
-                Copy
-              </button>
-              <Link
-                to={`/store/${store.slug}`}
-                target="_blank"
-                rel="noopener"
-                className="dash-btn dash-btn-dark"
-              >
-                View store
-              </Link>
+              <button type="button" onClick={() => { navigator.clipboard.writeText(location.origin + "/store/" + store.slug); toast.show("Link copied"); }} className="dash-btn dash-btn-line">Copy</button>
+              <Link to={`/store/${store.slug}`} target="_blank" rel="noopener" className="dash-btn dash-btn-dark">View store</Link>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── DANGER ── */}
+      {/* DANGER */}
       <section className="st-panel st-panel-danger">
         <div className="st-panel-head">
           <h2 className="dash-section-title">Danger zone</h2>
         </div>
         <div className="st-panel-body">
-          <p className="st-help">
-            Deleting your store removes every product and cancels your plan. This cannot be undone.
-          </p>
-          <button
-            type="button"
-            className="st-danger-btn"
-            onClick={() => toast.show("Contact support to delete your store")}
-          >
-            Delete store
-          </button>
+          <p className="st-help">Deleting your store removes every product and cancels your plan. This cannot be undone.</p>
+          <button type="button" className="st-danger-btn" onClick={() => toast.show("Contact support to delete your store")}>Delete store</button>
         </div>
       </section>
     </DashboardLayout>
   );
 }
 
-/* helper: convert a data URL back to a Blob for upload */
 function dataUrlToBlob(dataUrl: string): Blob {
   const [meta, b64] = dataUrl.split(",");
   const mime = /:(.*?);/.exec(meta)?.[1] ?? "image/jpeg";
