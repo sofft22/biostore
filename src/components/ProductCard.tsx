@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Product } from '../types';
-import { formatPrice } from '../config';
+import { naira } from '../lib/format';
 
 interface Props {
   product: Product;
@@ -200,11 +200,11 @@ export function ProductCard({
 
         <div className="mt-0.5 flex items-baseline gap-2 sm:mt-1">
           <p className="font-numbers text-[11.5px] font-normal uppercase tracking-[0.06em] text-charcoal/55 sm:text-[12px]">
-            {formatPrice(product.price)}
+            {naira(product.price)}
           </p>
           {hasDiscount && (
             <p className="font-numbers text-[10.5px] uppercase tracking-[0.06em] text-charcoal/35 line-through sm:text-[11px]">
-              {formatPrice(product.compare_at_price!)}
+              {naira(product.compare_at_price!)}
             </p>
           )}
         </div>
@@ -212,3 +212,5 @@ export function ProductCard({
     </article>
   );
 }
+
+export default ProductCard;
