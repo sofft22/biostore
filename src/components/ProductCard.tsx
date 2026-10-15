@@ -5,12 +5,10 @@ import { naira } from '../lib/format';
 interface Props {
   product: Product;
   onClick: () => void;
-  onChat: () => void;
+  onChat?: () => void;
   onAddToCart: () => void;
   priority?: boolean;
-  /** Show the "New" badge. Parent decides (e.g. only first 4). */
   showNew?: boolean;
-  /** Show discount badge + slashed price — off on homepage, on in shop */
   showDiscount?: boolean;
 }
 
@@ -33,33 +31,11 @@ export function ProductCard({
   );
 
   const hasSecondImage = images.length > 1;
-
   const altText = `${product.name} — biomart`;
 
-  const handleQuickAction = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (hasVariants) {
-      onClick();
-    } else {
-      onAddToCart();
-    }
-  };
+  // Use the ACTUAL field name from types/index.ts
+  const inStock = product.in_stock;
 
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    if (!el.clientWidth) return;
-    const idx = Math.round(el.scrollLeft / el.clientWidth);
-    setActiveIdx(idx);
-  };
-
-  // Only two badges exist: "New" (from showNew prop) and "Sold out" (from inStock)
-  const showNewBadge = showNew;
-
-  // Only treat as sold out when inStock is EXPLICITLY false
-  const inStock =
-    (product as any).inStock ?? (product as any).in_stock ?? true;
-
-  // Discount only if showDiscount is on
   const hasDiscount =
     showDiscount &&
     product.compare_at_price != null &&
@@ -71,19 +47,29 @@ export function ProductCard({
       )
     : 0;
 
+  const handleQuickAction = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (hasVariants) onClick();
+    else onAddToCart();
+  };
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (!el.clientWidth) return;
+    setActiveIdx(Math.round(el.scrollLeft / el.clientWidth));
+  };
+
   return (
-    <article className="group flex flex-col">
+    <article className="pc">
       <button
         onClick={onClick}
-        className="relative aspect-[4/5] w-full overflow-hidden rounded-sm bg-cream"
+        className="pc-media"
         aria-label={`View ${product.name}`}
       >
-        {!imgLoaded && (
-          <div className="absolute inset-0 animate-pulse bg-cream" />
-        )}
+        {!imgLoaded && images.length > 0 && <div className="pc-skeleton" />}
 
         {/* DESKTOP: hover swap */}
-        <div className="absolute inset-0 hidden md:block">
+        <div className="pc-desktop">
           {images[0] && (
             <img
               src={images[0]}
@@ -92,120 +78,84 @@ export function ProductCard({
               fetchPriority={priority ? 'high' : 'auto'}
               decoding="async"
               onLoad={() => setImgLoaded(true)}
-              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
-                hasSecondImage ? 'group-hover:opacity-0' : ''
-              } ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+              className={`pc-img pc-img-swap ${imgLoaded ? 'is-loaded' : ''}`}
             />
           )}
-
           {hasSecondImage && (
             <img
               src={images[1]}
               alt={`${product.name} — alternate view`}
               loading="lazy"
-              fetchPriority="low"
               decoding="async"
-              className="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+              className="pc-img pc-img-alt"
             />
           )}
         </div>
 
         {/* MOBILE: swipe carousel */}
-        <div className="absolute inset-0 md:hidden">
+        <div className="pc-mobile">
           {images.length > 0 ? (
-            <div
-              onScroll={handleScroll}
-              className="no-scrollbar flex h-full w-full snap-x snap-mandatory overflow-x-auto"
-            >
+            <div onScroll={handleScroll} className="pc-carousel no-scrollbar">
               {images.map((url, i) => (
-                <div
-                  key={i}
-                  className="h-full w-full flex-shrink-0 snap-center"
-                >
+                <div key={i} className="pc-slide">
                   <img
                     src={url}
                     alt={i === 0 ? altText : `${product.name} — view ${i + 1}`}
                     loading={i === 0 && priority ? 'eager' : 'lazy'}
-                    fetchPriority={i === 0 && priority ? 'high' : 'auto'}
                     decoding="async"
                     onLoad={i === 0 ? () => setImgLoaded(true) : undefined}
-                    className="h-full w-full object-cover"
+                    className="pc-img"
                   />
                 </div>
               ))}
             </div>
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-cream text-charcoal/40">
-              <span className="text-[11px] uppercase tracking-[0.14em]">
-                No image
-              </span>
-            </div>
+            <div className="pc-no-image">No image</div>
           )}
-
           {hasSecondImage && (
-            <div className="pointer-events-none absolute bottom-0 left-1/2 z-10 flex w-10 -translate-x-1/2">
+            <div className="pc-dots">
               {images.map((_, i) => (
-                <span
-                  key={i}
-                  className={`h-[3px] flex-1 transition-opacity duration-300 ${
-                    i === activeIdx ? 'bg-cream' : 'bg-cream/30'
-                  }`}
-                />
+                <span key={i} className={`pc-dot ${i === activeIdx ? 'on' : ''}`} />
               ))}
             </div>
           )}
         </div>
 
-        {/* Badges — ONLY "New" and discount */}
-        <div className="pointer-events-none absolute left-2 top-2 z-10 flex flex-col items-start gap-1.5 sm:left-3 sm:top-3">
-          {showNewBadge && (
-            <span className="bg-cream px-2 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-charcoal sm:px-2.5 sm:text-[9.5px]">
-              New
-            </span>
-          )}
-
-          {hasDiscount && (
-            <span className="bg-charcoal px-2 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-cream sm:px-2.5 sm:text-[9.5px]">
-              −{discountPercent}%
-            </span>
-          )}
-        </div>
-
-        {/* Sold out overlay — only when explicitly false */}
-        {!inStock && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-cream/80">
-            <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-charcoal">
-              Sold out
-            </span>
+        {/* Badges */}
+        {(showNew || hasDiscount) && (
+          <div className="pc-badges">
+            {showNew && <span className="pc-badge pc-badge-dark">New</span>}
+            {hasDiscount && (
+              <span className="pc-badge pc-badge-green">−{discountPercent}%</span>
+            )}
           </div>
         )}
 
+        {/* Sold out — only when explicitly false */}
+        {!inStock && (
+          <div className="pc-sold-out">
+            <span>Sold out</span>
+          </div>
+        )}
+
+        {/* Hover CTA */}
         {inStock && (
-          <div className="pointer-events-none absolute inset-0 z-10 hidden items-end justify-center pb-6 md:flex">
-            <button
-              onClick={handleQuickAction}
-              className="pointer-events-auto translate-y-3 rounded-md bg-black px-6 py-3 text-[10.5px] font-bold uppercase tracking-[0.18em] text-white shadow-md opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100 hover:bg-[#C66B4F]"
-            >
+          <div className="pc-hover-cta">
+            <button onClick={handleQuickAction} className="pc-quick-btn">
               {hasVariants ? 'Choose options' : 'Add to bag'}
             </button>
           </div>
         )}
       </button>
 
-      {/* Meta */}
-      <button onClick={onClick} className="mt-2 text-left sm:mt-2.5">
-        <h3 className="text-[11.5px] font-normal uppercase leading-[1.4] tracking-[0.08em] text-charcoal sm:text-[12px] sm:tracking-[0.09em]">
-          {product.name}
-        </h3>
-
-        <div className="mt-0.5 flex items-baseline gap-2 sm:mt-1">
-          <p className="font-numbers text-[11.5px] font-normal uppercase tracking-[0.06em] text-charcoal/55 sm:text-[12px]">
-            {naira(product.price)}
-          </p>
+      <button onClick={onClick} className="pc-meta">
+        <p className="pc-name">{product.name}</p>
+        <div className="pc-price-row">
+          <span className="pc-price">{naira(product.price)}</span>
           {hasDiscount && (
-            <p className="font-numbers text-[10.5px] uppercase tracking-[0.06em] text-charcoal/35 line-through sm:text-[11px]">
+            <span className="pc-price-old">
               {naira(product.compare_at_price!)}
-            </p>
+            </span>
           )}
         </div>
       </button>
