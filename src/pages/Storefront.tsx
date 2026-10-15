@@ -505,7 +505,7 @@ export default function Storefront() {
                 <path d="M20 26V14A10 10 0 0 1 40 14V26" />
               </svg>
               Powered by biomart
-            </span>
+                        </a>
           </div>
         </div>
       </footer>
