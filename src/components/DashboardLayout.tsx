@@ -73,6 +73,71 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="dash-shell">
+      {/* Guaranteed-styling for the mobile tab bar — overrides any sag in the stylesheet */}
+      <style>{`
+        @media (max-width: 899px) {
+          .dash-tabbar {
+            display: grid !important;
+            grid-template-columns: repeat(4, 1fr) !important;
+            align-items: center !important;
+            justify-items: stretch !important;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 50;
+            background: rgba(251, 249, 245, 0.96);
+            backdrop-filter: blur(18px) saturate(1.4);
+            -webkit-backdrop-filter: blur(18px) saturate(1.4);
+            border-top: 1px solid var(--line);
+            padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+            gap: 4px;
+            height: auto;
+          }
+          .dash-tab {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 3px;
+            padding: 8px 4px !important;
+            margin: 0 !important;
+            height: 52px;
+            line-height: 1 !important;
+            font: 700 10px/1 var(--font) !important;
+            letter-spacing: 0.01em;
+            color: var(--muted);
+            text-decoration: none;
+            border-radius: 12px;
+            transition: color 0.15s ease, background 0.15s ease;
+            box-sizing: border-box;
+          }
+          .dash-tab .ic {
+            width: 22px !important;
+            height: 22px !important;
+            flex: none;
+            margin: 0 !important;
+            display: block;
+          }
+          .dash-tab > span {
+            display: block;
+            margin: 0 !important;
+            line-height: 1 !important;
+            transform: translateY(0);
+          }
+          .dash-tab.active {
+            color: var(--ink);
+            background: rgba(15, 122, 74, 0.07);
+          }
+          .dash-tab.active .ic { color: var(--green); }
+          .dash-body { padding-bottom: 92px !important; }
+          .dash-aside { display: none !important; }
+        }
+        @media (min-width: 900px) {
+          .dash-tabbar { display: none !important; }
+        }
+      `}</style>
+
       <div className="dash-blobs" aria-hidden="true">
         <div className="dash-blob g" />
       </div>
@@ -108,7 +173,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <div className="dash-body">
         <div className="dash-wrap">
           <div className="dash-grid">
-            {/* Desktop sidebar */}
             <aside className="dash-aside">
               <nav className="dash-nav" aria-label="Dashboard">
                 {NAV.map((item) => (
@@ -132,7 +196,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      {/* Mobile bottom tab bar */}
       <nav className="dash-tabbar" aria-label="Mobile navigation">
         {NAV.map((item) => (
           <NavLink
