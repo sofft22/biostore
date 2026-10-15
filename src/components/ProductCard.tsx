@@ -33,7 +33,7 @@ export function ProductCard({
   const hasSecondImage = images.length > 1;
   const altText = `${product.name} — biomart`;
 
-  // Use the ACTUAL field name from types/index.ts
+  // Works with either camelCase or snake_case from backend
   const inStock = (product as any).inStock ?? (product as any).in_stock ?? true;
 
   const hasDiscount =
@@ -68,7 +68,6 @@ export function ProductCard({
       >
         {!imgLoaded && images.length > 0 && <div className="pc-skeleton" />}
 
-        {/* DESKTOP: hover swap */}
         <div className="pc-desktop">
           {images[0] && (
             <img
@@ -92,7 +91,6 @@ export function ProductCard({
           )}
         </div>
 
-        {/* MOBILE: swipe carousel */}
         <div className="pc-mobile">
           {images.length > 0 ? (
             <div onScroll={handleScroll} className="pc-carousel no-scrollbar">
@@ -121,7 +119,6 @@ export function ProductCard({
           )}
         </div>
 
-        {/* Badges */}
         {(showNew || hasDiscount) && (
           <div className="pc-badges">
             {showNew && <span className="pc-badge pc-badge-dark">New</span>}
@@ -131,14 +128,12 @@ export function ProductCard({
           </div>
         )}
 
-        {/* Sold out — only when explicitly false */}
         {!inStock && (
           <div className="pc-sold-out">
             <span>Sold out</span>
           </div>
         )}
 
-        {/* Hover CTA */}
         {inStock && (
           <div className="pc-hover-cta">
             <button onClick={handleQuickAction} className="pc-quick-btn">
