@@ -2,7 +2,7 @@ export const onRequestGet: PagesFunction<{ DB: D1Database }> = async ({ env, par
   const slug = params.slug as string;
 
   const store = await env.DB.prepare(
-    "SELECT id, slug, name, bio, whatsapp, instagram, tiktok, cover_url FROM stores WHERE slug = ?"
+    "SELECT id, slug, name, bio, tagline, address, whatsapp, instagram, tiktok, cover_url FROM stores WHERE slug = ?"
   ).bind(slug).first();
 
   if (!store) {
@@ -17,18 +17,10 @@ export const onRequestGet: PagesFunction<{ DB: D1Database }> = async ({ env, par
     store,
     products: results.map((p: any) => {
       let parsedImages: string[] = [];
-      try {
-        parsedImages = JSON.parse(p.images || "[]");
-      } catch {
-        parsedImages = [];
-      }
+      try { parsedImages = JSON.parse(p.images || "[]"); } catch { parsedImages = []; }
 
       let parsedVariants: any = undefined;
-      try {
-        if (p.variants) parsedVariants = JSON.parse(p.variants);
-      } catch {
-        parsedVariants = undefined;
-      }
+      try { if (p.variants) parsedVariants = JSON.parse(p.variants); } catch {}
 
       return {
         id: p.id,
@@ -36,15 +28,12 @@ export const onRequestGet: PagesFunction<{ DB: D1Database }> = async ({ env, par
         price: p.price,
         compare_at_price: p.compare_at_price ?? null,
         description: p.description,
-        // Send BOTH field names so frontend never breaks
         category: p.category,
         category_id: p.category,
         subcategory: p.subcategory ?? null,
         badge: p.badge ?? null,
-        // Send BOTH field names
         in_stock: !!p.in_stock,
         inStock: !!p.in_stock,
-        // Send BOTH field names for images
         image_url: parsedImages[0] ?? null,
         image_urls: parsedImages.slice(1),
         images: parsedImages,
