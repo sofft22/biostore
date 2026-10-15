@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
@@ -6,7 +6,6 @@ import DashboardLayout from "../components/DashboardLayout";
 import {
   store as storeApi,
   uploadImage,
-  products as productsApi,
 } from "../lib/api";
 import {
   getCategoriesWithImages,
@@ -16,13 +15,9 @@ import {
   setCategoryImage,
   removeCategoryImage,
 } from "../lib/storeData";
-import type { Category, Product } from "../types";
+import type { Category } from "../types";
 
 type CatWithImg = Category & { image?: string };
-
-function formatPrice(n: number): string {
-  return "₦" + n.toLocaleString("en-NG");
-}
 
 export default function Settings() {
   const { store, refresh } = useAuth();
@@ -36,6 +31,13 @@ export default function Settings() {
   const [tiktok, setTiktok] = useState(store?.tiktok ?? "");
   const [saving, setSaving] = useState(false);
 
+  /* ── banner ── */
+  const [bannerUrl, setBannerUrl] = useState<string>(
+    (store as any)?.cover_url ?? ""
+  );
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement | null>(null);
+
   /* ── categories ── */
   const [categories, setCategories] = useState<CatWithImg[]>([]);
   const [newCatName, setNewCatName] = useState("");
@@ -43,11 +45,6 @@ export default function Settings() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [uploadingId, setUploadingId] = useState<string | null>(null);
-
-  /* ── featured ── */
-  const [products, setProducts] = useState<Product[]>([]);
-  const [featuredId, setFeaturedId] = useState<string>("");
-  const [settingFeatured, setSettingFeatured] = useState(false);
 
   const refreshCategories = () => {
     if (!store?.slug) return;
@@ -60,38 +57,13 @@ export default function Settings() {
   }, [store?.slug]);
 
   useEffect(() => {
-    if (!store?.slug) return;
-    (async () => {
-      try {
-        const data = await storeApi.public(store.slug);
-        const list = (data.products as Product[]) ?? [];
-        setProducts(list);
-
-        // Featured: the one marked is_featured, else the oldest (first added)
-        const marked = list.find((p) => p.is_featured);
-        if (marked) {
-          setFeaturedId(marked.id);
-        } else if (list.length > 0) {
-          const oldest = [...list].sort(
-            (a, b) =>
-              new Date((a as any).created_at ?? 0).getTime() -
-              new Date((b as any).created_at ?? 0).getTime()
-          )[0];
-          setFeaturedId(oldest.id);
-        }
-      } catch {
-        setProducts([]);
-      }
-    })();
-  }, [store?.slug]);
-
-  useEffect(() => {
     if (!store) return;
     setName(store.name);
     setBio(store.bio ?? "");
     setWhatsapp(store.whatsapp);
     setInstagram(store.instagram ?? "");
     setTiktok(store.tiktok ?? "");
+    setBannerUrl((store as any).cover_url ?? "");
   }, [store]);
 
   if (!store) return null;
@@ -113,6 +85,32 @@ export default function Settings() {
       toast.show(err instanceof Error ? err.message : "Could not save");
     }
     setSaving(false);
+  };
+
+  /* ── banner handlers ── */
+  const handleUploadBanner = async (file: File) => {
+    setUploadingBanner(true);
+    try {
+      const url = await uploadImage(file);
+      setBannerUrl(url);
+      await storeApi.update({ cover_url: url } as any);
+      await refresh();
+      toast.show("Banner updated");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : "Upload failed");
+    }
+    setUploadingBanner(false);
+  };
+
+  const handleRemoveBanner = async () => {
+    setBannerUrl("");
+    try {
+      await storeApi.update({ cover_url: null } as any);
+      await refresh();
+      toast.show("Banner removed");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : "Could not remove");
+    }
   };
 
   /* ── category handlers ── */
@@ -168,24 +166,6 @@ export default function Settings() {
     toast.show("Image removed");
   };
 
-  /* ── featured handler ── */
-  const handleSetFeatured = async (productId: string) => {
-    setSettingFeatured(true);
-    try {
-      for (const p of products) {
-        const shouldBeFeatured = p.id === productId;
-        if (!!p.is_featured !== shouldBeFeatured) {
-          await productsApi.update(p.id, { is_featured: shouldBeFeatured });
-        }
-      }
-      setFeaturedId(productId);
-      toast.show("Featured product updated");
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : "Could not update");
-    }
-    setSettingFeatured(false);
-  };
-
   return (
     <DashboardLayout>
       <section className="dash-head" style={{ padding: 0 }}>
@@ -227,6 +207,76 @@ export default function Settings() {
           <button onClick={handleSaveStore} disabled={saving} className="st-save">
             {saving ? "Saving…" : "Save changes"}
           </button>
+        </div>
+      </section>
+
+      {/* ── BANNER IMAGE ── */}
+      <section className="st-panel">
+        <div className="st-panel-head">
+          <h2 className="dash-section-title">Banner image</h2>
+        </div>
+        <div className="st-panel-body">
+          <p className="st-help">
+            Shown at the top of your storefront. Wide landscape photos work best.
+          </p>
+
+          {bannerUrl ? (
+            <div className="st-banner-preview">
+              <img src={bannerUrl} alt="Banner" />
+              <button
+                type="button"
+                className="st-banner-x"
+                onClick={handleRemoveBanner}
+                aria-label="Remove banner"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <label className="st-banner-add">
+              {uploadingBanner ? (
+                <div className="dash-spinner" />
+              ) : (
+                <>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  <span>Upload banner</span>
+                </>
+              )}
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                disabled={uploadingBanner}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUploadBanner(file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          )}
+
+          {bannerUrl && (
+            <label className="btn-sm save" style={{ display: "inline-flex", cursor: "pointer", alignItems: "center", gap: 8 }}>
+              {uploadingBanner ? "Uploading…" : "Change banner"}
+              <input
+                type="file"
+                accept="image/*"
+                hidden
+                disabled={uploadingBanner}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUploadBanner(file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          )}
         </div>
       </section>
 
@@ -367,52 +417,6 @@ export default function Settings() {
                 );
               })}
             </ul>
-          )}
-        </div>
-      </section>
-
-      {/* ── FEATURED PRODUCT ── */}
-      <section className="st-panel">
-        <div className="st-panel-head">
-          <h2 className="dash-section-title">Featured product</h2>
-        </div>
-        <div className="st-panel-body">
-          <p className="st-help">
-            Shown at the top of your storefront. Defaults to your first-added product — pick a different one below.
-          </p>
-          {products.length === 0 ? (
-            <p className="st-help" style={{ opacity: 0.6 }}>No products yet.</p>
-          ) : (
-            <div className="st-featured-list">
-              {products.map((p) => {
-                const active = featuredId === p.id;
-                const img = (p.images && p.images[0]) || p.image_url;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handleSetFeatured(p.id)}
-                    className={`st-featured-item ${active ? "on" : ""}`}
-                    disabled={settingFeatured}
-                  >
-                    <div className="st-featured-thumb">
-                      {img ? <img src={img} alt={p.name} /> : null}
-                    </div>
-                    <div className="st-featured-info">
-                      <p className="st-featured-name">{p.name}</p>
-                      <p className="st-featured-meta">{formatPrice(p.price)}</p>
-                    </div>
-                    {active && (
-                      <span className="st-featured-check">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M5 12.5l4.5 4.5L19 7.5" />
-                        </svg>
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
           )}
         </div>
       </section>
