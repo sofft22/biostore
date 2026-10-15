@@ -9,9 +9,11 @@ import { getCategoryLabel } from "../lib/categories";
 import { getCategories, getCategoryImages } from "../lib/storeData";
 import type { Category, Product } from "../types";
 
-/** Capitalize first letter of each word */
-function titleCase(s: string): string {
-  return s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+/** Split "Adaeze's Closet" into { first, second } — first word bold, rest thin */
+function splitBrandName(name: string): { first: string; second: string } {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return { first: parts[0], second: "" };
+  return { first: parts[0], second: parts.slice(1).join(" ") };
 }
 
 export default function Storefront() {
@@ -26,8 +28,6 @@ export default function Storefront() {
   const [activeCategory, setActiveCategory] = useState("all");
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryImages, setCategoryImages] = useState<Record<string, string>>({});
-
-  // Header behavior
   const [headerHidden, setHeaderHidden] = useState(false);
   const [headerSolid, setHeaderSolid] = useState(false);
   const lastYRef = useRef(0);
@@ -46,17 +46,11 @@ export default function Storefront() {
       const diff = y - last;
       const atTop = y < 40;
 
-      // Solid header once past the banner top
       setHeaderSolid(y > 120);
 
-      // Hide when scrolling down past a threshold, show when scrolling up
-      if (atTop) {
-        setHeaderHidden(false);
-      } else if (diff > 6 && y > 200) {
-        setHeaderHidden(true);
-      } else if (diff < -6) {
-        setHeaderHidden(false);
-      }
+      if (atTop) setHeaderHidden(false);
+      else if (diff > 6 && y > 200) setHeaderHidden(true);
+      else if (diff < -6) setHeaderHidden(false);
 
       lastYRef.current = y;
       ticking = false;
@@ -116,9 +110,7 @@ export default function Storefront() {
     return list;
   }, [products, activeCategory, search]);
 
-  const handleOpenProduct = (p: Product) => {
-    setOpenProduct(p);
-  };
+  const handleOpenProduct = (p: Product) => setOpenProduct(p);
 
   const handleAddToCart = (
     product: Product,
@@ -131,18 +123,13 @@ export default function Storefront() {
   };
 
   const scrollToShop = () => {
-    const el = document.getElementById("shop-all");
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById("shop-all")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-
   const scrollToNew = () => {
-    const el = document.getElementById("new-arrivals");
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById("new-arrivals")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-
   const scrollToCategories = () => {
-    const el = document.getElementById("categories");
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById("categories")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   if (loading) {
@@ -164,37 +151,28 @@ export default function Storefront() {
     );
   }
 
+  const brand = splitBrandName(store.name);
   const headerClasses = [
     "sf-head",
     headerSolid ? "sf-head-solid" : "",
     headerHidden ? "sf-head-hidden" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ].filter(Boolean).join(" ");
 
   return (
     <div className="sf-shell">
-      {/* ═══════════════ HEADER ═══════════════ */}
+      {/* HEADER */}
       <header className={headerClasses}>
         <div className="sf-head-inner">
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             className="sf-wordmark"
+            aria-label={store.name}
           >
-            <svg
-              className="sf-wordmark-icon"
-              viewBox="0 0 60 64"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3.2"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <path d="M10 20H50L55 54Q55.4 58 51.5 58H8.5Q4.6 58 5 54Z" />
-              <path d="M20 26V14A10 10 0 0 1 40 14V26" />
-            </svg>
-            <span>{titleCase(store.name)}</span>
+            <span className="sf-wordmark-1">{brand.first}</span>
+            {brand.second && (
+              <span className="sf-wordmark-2">{brand.second}</span>
+            )}
+            <span className="sf-wordmark-dot">.</span>
           </button>
 
           <div className="sf-head-spacer" />
@@ -253,7 +231,7 @@ export default function Storefront() {
         )}
       </header>
 
-      {/* ═══════════════ BANNER ═══════════════ */}
+      {/* BANNER */}
       <section className="sf-banner">
         <img
           src={
@@ -276,7 +254,7 @@ export default function Storefront() {
         </div>
       </section>
 
-      {/* ═══════════════ NEW ARRIVALS ═══════════════ */}
+      {/* NEW ARRIVALS */}
       {newArrivals.length > 0 && (
         <section className="sf-section" id="new-arrivals">
           <div className="sf-section-head">
@@ -298,15 +276,18 @@ export default function Storefront() {
                 key={p.id}
                 product={p}
                 priority={i < 4}
+                showNew={i < 4}
                 showDiscount
                 onClick={() => handleOpenProduct(p)}
+                onChat={() => {}}
+                onAddToCart={() => handleAddToCart(p, 1, null, p.price)}
               />
             ))}
           </div>
         </section>
       )}
 
-      {/* ═══════════════ CATEGORIES ═══════════════ */}
+      {/* CATEGORIES — always show when there's at least 1 */}
       {usedCategories.length > 0 && (
         <section className="sf-section sf-section-wide" id="categories">
           <div className="sf-section-head-center">
@@ -335,7 +316,7 @@ export default function Storefront() {
                   )}
                   <div className="sf-cat-tile-overlay" />
                   <div className="sf-cat-tile-content">
-                    <div className="sf-cat-tile-name">{titleCase(c.label)}</div>
+                    <div className="sf-cat-tile-name">{c.label}</div>
                   </div>
                 </button>
               );
@@ -344,7 +325,7 @@ export default function Storefront() {
         </section>
       )}
 
-      {/* ═══════════════ SHOP ALL ═══════════════ */}
+      {/* SHOP ALL */}
       <section className="sf-section" id="shop-all">
         <div className="sf-section-head">
           <div>
@@ -388,20 +369,29 @@ export default function Storefront() {
                 key={p.id}
                 product={p}
                 priority={i < 4}
+                showNew={i < 4}
                 showDiscount
                 onClick={() => handleOpenProduct(p)}
+                onChat={() => {}}
+                onAddToCart={() => handleAddToCart(p, 1, null, p.price)}
               />
             ))}
           </div>
         )}
       </section>
 
-      {/* ═══════════════ FOOTER ═══════════════ */}
+      {/* FOOTER */}
       <footer className="sf-footer" id="contact">
         <div className="sf-footer-inner">
           <div className="sf-footer-top">
             <div>
-              <div className="sf-footer-brand">{titleCase(store.name)}</div>
+              <div className="sf-footer-brand">
+                <span className="sf-footer-brand-1">{brand.first}</span>
+                {brand.second && (
+                  <span className="sf-footer-brand-2">{brand.second}</span>
+                )}
+                <span className="sf-footer-brand-dot">.</span>
+              </div>
               {store.bio && <p className="sf-footer-tag">{store.bio}</p>}
             </div>
 
@@ -463,7 +453,15 @@ export default function Storefront() {
           </div>
 
           <div className="sf-footer-bot">
-            <span>© {new Date().getFullYear()} {titleCase(store.name)}</span>
+            <span>
+              <span className="sf-footer-brand-1">{brand.first}</span>
+              {brand.second && (
+                <span className="sf-footer-brand-2">{brand.second}</span>
+              )}
+              <span className="sf-footer-brand-dot">.</span>
+              {" "}
+              <span style={{ opacity: 0.7, marginLeft: 6, fontSize: "0.85em" }}>· Lagos</span>
+            </span>
             <span className="sf-footer-pow">
               <svg viewBox="0 0 60 64" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinejoin="round" strokeLinecap="round">
                 <path d="M10 20H50L55 54Q55.4 58 51.5 58H8.5Q4.6 58 5 54Z" />
