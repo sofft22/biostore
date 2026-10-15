@@ -2997,3 +2997,148 @@ textarea.pd-input { resize: vertical; min-height: 68px; }
   .auth-card, .auth-error { animation: none; opacity: 1; transform: none; }
   .nf-inner { animation: none; opacity: 1; }
 }
+
+/* ─── Pricing preview ─── */
+.pd-price-preview {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--green-soft);
+  border: 1px solid rgba(15, 122, 74, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.pd-price-preview-was {
+  color: var(--faint);
+  text-decoration: line-through;
+  font-weight: 500;
+}
+.pd-price-preview-arrow {
+  color: var(--faint);
+  font-weight: 600;
+}
+.pd-price-preview-now {
+  font-weight: 800;
+  color: var(--ink);
+  font-size: 15px;
+}
+.pd-price-preview-badge {
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: var(--green);
+  color: #fff;
+  font: 800 10.5px/1 var(--font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ─── Variant card ─── */
+.pd-variant-card {
+  position: relative;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.pd-variant-x {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.pd-variant-x:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: rgba(179, 38, 30, 0.05);
+}
+
+.pd-variant-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-right: 36px;
+}
+@media (max-width: 640px) {
+  .pd-variant-row { grid-template-columns: 1fr; }
+}
+.pd-variant-field { display: grid; gap: 6px; }
+
+.pd-variant-price {
+  display: flex;
+  gap: 6px;
+}
+.pd-variant-pill {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  font: 600 12px/1 var(--font);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.pd-variant-pill:hover { border-color: var(--ink); color: var(--ink); }
+.pd-variant-pill.on {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.pd-variant-extra-row {
+  margin-bottom: 12px;
+  display: grid;
+  gap: 6px;
+}
+.pd-variant-extra-input {
+  position: relative;
+}
+.pd-variant-extra-prefix {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--faint);
+  font-size: 13.5px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.pd-variant-extra-input .pd-input {
+  padding-left: 42px;
+  text-align: left;
+}
+
+.pd-variant-preview {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-size: 13px;
+}
+.pd-variant-preview-label {
+  color: var(--ink);
+  font-weight: 700;
+}
+.pd-variant-preview-dot { color: var(--faint); }
+.pd-variant-preview-price {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Bolder product name on cards */
+.pc-name {
+  font-weight: 700;
+}
