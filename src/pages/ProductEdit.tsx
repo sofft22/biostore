@@ -5,6 +5,7 @@ import { products as productsApi, uploadImage, store as storeApi } from "../lib/
 import { useAuth } from "../context/AuthContext";
 import { SUBCATEGORIES } from "../lib/categories";
 import { getCategories } from "../lib/storeData";
+import { naira } from "../lib/format";
 import type { Category, Product } from "../types";
 
 const BADGES = ["Bestseller", "New", "Limited"];
@@ -26,7 +27,7 @@ export default function ProductEdit() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
-  const [discount, setDiscount] = useState(""); // percent
+  const [wasPrice, setWasPrice] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [subcategory, setSubcategory] = useState<string>("");
   const [badge, setBadge] = useState("");
@@ -39,14 +40,22 @@ export default function ProductEdit() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  /* Load categories */
   useEffect(() => {
     if (!currentStore?.slug) return;
     const list = getCategories(currentStore.slug);
     setCategories(list);
-    if (!categoryId && list.length > 0) setCategoryId(list[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStore?.slug]);
 
+  /* Default category to first when creating new product */
+  useEffect(() => {
+    if (!product && !categoryId && categories.length > 0) {
+      setCategoryId(categories[0].id);
+    }
+  }, [categories, product, categoryId]);
+
+  /* Load product for edit */
   useEffect(() => {
     if (!id || !currentStore?.slug) {
       setLoadingProduct(false);
@@ -67,29 +76,25 @@ export default function ProductEdit() {
     })();
   }, [id, currentStore?.slug]);
 
+  /* Hydrate form from product */
   useEffect(() => {
     if (!product) return;
     setName(product.name);
     setDescription(product.description ?? "");
     setPrice(String(product.price));
-
-    // Derive discount % from compare_at_price if present
-    if (product.compare_at_price && product.compare_at_price > product.price) {
-      const pct = Math.round(
-        ((product.compare_at_price - product.price) / product.compare_at_price) * 100
-      );
-      setDiscount(String(pct));
-    } else {
-      setDiscount("");
-    }
-
-    setCategoryId(product.category_id);
+    setWasPrice(
+      product.compare_at_price && product.compare_at_price > product.price
+        ? String(product.compare_at_price)
+        : ""
+    );
+    setCategoryId(product.category_id || (categories[0]?.id ?? ""));
     setSubcategory((product as any).subcategory ?? "");
     setBadge(product.badge ?? "");
-    setInStock(product.in_stock);
+    setInStock((product as any).inStock ?? product.in_stock ?? true);
     setImageUrl(product.image_url ?? "");
     setImageUrls(product.image_urls ?? []);
     setVariants(product.variants?.suggested ?? []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product]);
 
   const allImages = [imageUrl, ...imageUrls].filter(Boolean);
@@ -136,13 +141,13 @@ export default function ProductEdit() {
   const removeVariant = (i: number) =>
     setVariants((prev) => prev.filter((_, idx) => idx !== i));
 
-  // Compute compare-at price from price + discount %
+  /* Computed values */
   const numericPrice = Number(price) || 0;
-  const numericDiscount = Number(discount) || 0;
-  const compareAtPrice =
-    numericDiscount > 0 && numericPrice > 0
-      ? Math.round(numericPrice / (1 - numericDiscount / 100))
-      : null;
+  const numericWas = Number(wasPrice) || 0;
+  const hasValidWas = numericWas > numericPrice && numericPrice > 0;
+  const discountPercent = hasValidWas
+    ? Math.round(((numericWas - numericPrice) / numericWas) * 100)
+    : 0;
 
   const handleSave = async () => {
     setError("");
@@ -150,23 +155,25 @@ export default function ProductEdit() {
     if (!price || Number(price) <= 0) return setError("Valid price is required");
     if (!imageUrl) return setError("Main image is required");
     if (!categoryId) return setError("Pick a category first");
-    if (numericDiscount < 0 || numericDiscount >= 100) {
-      return setError("Discount must be between 0 and 99");
+    if (wasPrice && numericWas <= numericPrice) {
+      return setError("'Was' price must be higher than current price");
     }
 
     setSaving(true);
 
-    const payload: Partial<Product> = {
+    const payload: any = {
       name: name.trim(),
       description: description.trim(),
       price: Number(price),
-      compare_at_price: compareAtPrice,
+      compare_at_price: hasValidWas ? numericWas : null,
       category_id: categoryId,
       subcategory: (categoryId === "clothing" && subcategory
         ? subcategory
         : null) as any,
       badge: badge || null,
+      // Send BOTH camelCase and snake_case so backend accepts either
       in_stock: inStock,
+      inStock: inStock,
       image_url: imageUrl,
       image_urls: imageUrls.length > 0 ? imageUrls : undefined,
       variants: variants.length > 0 ? { suggested: variants } : undefined,
@@ -218,7 +225,7 @@ export default function ProductEdit() {
         Back to products
       </button>
 
-      <section className="dash-head">
+      <section className="dash-head" style={{ padding: 0 }}>
         <p className="dash-head-eyebrow">{product ? "Edit" : "New"}</p>
         <h1 className="dash-title">
           {product ? <>Edit <em>product</em>.</> : <>New <em>product</em>.</>}
@@ -226,6 +233,7 @@ export default function ProductEdit() {
       </section>
 
       <div className="pd-form">
+        {/* BASICS */}
         <section className="pd-section">
           <h2 className="dash-section-title">Basics</h2>
           <div className="pd-fields">
@@ -238,71 +246,50 @@ export default function ProductEdit() {
           </div>
         </section>
 
+        {/* PRICING */}
         <section className="pd-section">
           <h2 className="dash-section-title">Pricing</h2>
           <div className="pd-fields">
-            <Field label="Price (₦)" hint="What customers pay">
+            <Field label="Price" hint="What customers pay today">
               <input
                 type="number"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                placeholder="32000"
+                placeholder="20000"
                 className="pd-input"
               />
             </Field>
-            <Field label="Discount %" hint="Optional. 0 for no discount. Shows crossed-out original price.">
+            <Field label="Was" hint="Optional. Original price before discount. Leave empty for no sale.">
               <input
                 type="number"
-                min={0}
-                max={99}
-                value={discount}
-                onChange={(e) => setDiscount(e.target.value)}
-                placeholder="0"
+                value={wasPrice}
+                onChange={(e) => setWasPrice(e.target.value)}
+                placeholder="27000"
                 className="pd-input"
               />
             </Field>
           </div>
 
-          {numericDiscount > 0 && numericPrice > 0 && (
-            <div
-              style={{
-                marginTop: 12,
-                padding: "12px 16px",
-                borderRadius: 10,
-                background: "var(--green-soft)",
-                border: "1px solid rgba(15,122,74,0.2)",
-                fontSize: 13.5,
-                color: "var(--ink)",
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                flexWrap: "wrap",
-              }}
-            >
-              <span style={{ fontWeight: 600, color: "var(--green)" }}>
-                {numericDiscount}% off
-              </span>
-              <span style={{ color: "var(--muted)" }}>
-                was ₦{compareAtPrice?.toLocaleString()}
-              </span>
-              <span style={{ fontWeight: 800 }}>
-                now ₦{numericPrice.toLocaleString()}
-              </span>
+          {hasValidWas && (
+            <div className="pd-price-preview">
+              <span className="pd-price-preview-was">{naira(numericWas)}</span>
+              <span className="pd-price-preview-arrow">→</span>
+              <span className="pd-price-preview-now">{naira(numericPrice)}</span>
+              <span className="pd-price-preview-badge">{discountPercent}% off</span>
             </div>
           )}
         </section>
 
+        {/* CATEGORIZATION */}
         <section className="pd-section">
           <div className="pd-section-head">
             <div>
               <h2 className="dash-section-title">Categorization</h2>
-              <p className="pd-section-sub">
-                Manage categories in the Categories page.
-              </p>
+              <p className="pd-section-sub">Group your product so customers can find it.</p>
             </div>
             <button
               type="button"
-              onClick={() => nav("/categories")}
+              onClick={() => nav("/settings")}
               className="pd-add-variant"
             >
               + Manage
@@ -310,8 +297,15 @@ export default function ProductEdit() {
           </div>
           <div className="pd-fields">
             <Field label="Category">
-              <select value={categoryId} onChange={(e) => { setCategoryId(e.target.value); if (e.target.value !== "clothing") setSubcategory(""); }} className="pd-input">
-                {categories.length === 0 && <option value="">No categories — add one first</option>}
+              <select
+                value={categoryId}
+                onChange={(e) => {
+                  setCategoryId(e.target.value);
+                  if (e.target.value !== "clothing") setSubcategory("");
+                }}
+                className="pd-input"
+              >
+                {categories.length === 0 && <option value="">No categories yet — add one in Settings</option>}
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>{c.label}</option>
                 ))}
@@ -329,7 +323,7 @@ export default function ProductEdit() {
               </Field>
             )}
 
-            <Field label="Badge">
+            <Field label="Badge" hint="Shows as a small tag on the product card">
               <select value={badge} onChange={(e) => setBadge(e.target.value)} className="pd-input">
                 <option value="">None</option>
                 {BADGES.map((b) => (<option key={b} value={b}>{b}</option>))}
@@ -338,24 +332,33 @@ export default function ProductEdit() {
           </div>
         </section>
 
+        {/* STOCK */}
         <section className="pd-section">
           <h2 className="dash-section-title">Stock</h2>
           <div className="pd-toggle-row">
             <div>
-              <p className="pd-toggle-title">In stock</p>
-              <p className="pd-toggle-hint">{inStock ? "Available for purchase" : "Hidden from sale"}</p>
+              <p className="pd-toggle-title">Available for purchase</p>
+              <p className="pd-toggle-hint">
+                {inStock ? "Customers can buy this product" : "Hidden — shows as sold out on your store"}
+              </p>
             </div>
-            <button type="button" onClick={() => setInStock(!inStock)} className={`pd-toggle ${inStock ? "on" : ""}`} aria-label="Toggle stock">
+            <button
+              type="button"
+              onClick={() => setInStock(!inStock)}
+              className={`pd-toggle ${inStock ? "on" : ""}`}
+              aria-label="Toggle stock"
+            >
               <span />
             </button>
           </div>
         </section>
 
+        {/* IMAGES */}
         <section className="pd-section">
           <div className="pd-section-head">
             <div>
               <h2 className="dash-section-title">Images</h2>
-              <p className="pd-section-sub">First image is main. Use arrows to reorder.</p>
+              <p className="pd-section-sub">First image is the main one. Use arrows to reorder.</p>
             </div>
             <p className="pd-count">{allImages.length} / 3</p>
           </div>
@@ -401,11 +404,12 @@ export default function ProductEdit() {
           </div>
         </section>
 
+        {/* VARIANTS */}
         <section className="pd-section">
           <div className="pd-section-head">
             <div>
               <h2 className="dash-section-title">Variants</h2>
-              <p className="pd-section-sub">Optional. Sizes, shades, or pack options.</p>
+              <p className="pd-section-sub">Optional. Sizes, colors, or pack options.</p>
             </div>
             <button type="button" onClick={addVariant} className="pd-add-variant">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" width="14" height="14"><path d="M12 5v14M5 12h14" /></svg>
@@ -414,22 +418,83 @@ export default function ProductEdit() {
           </div>
 
           {variants.length === 0 ? (
-            <div className="pd-variant-empty">No variants — single price.</div>
+            <div className="pd-variant-empty">
+              No variants — customers just pick a quantity.
+            </div>
           ) : (
             <div className="pd-variants">
-              {variants.map((v, i) => (
-                <div key={i} className="pd-variant">
-                  <div className="pd-variant-grid">
-                    <Field label="Label">
-                      <input value={v.label} onChange={(e) => updateVariant(i, { label: e.target.value })} placeholder="e.g. Size M" className="pd-input" />
-                    </Field>
-                    <Field label="+ Price (₦)">
-                      <input type="number" value={v.priceDelta} onChange={(e) => updateVariant(i, { priceDelta: Number(e.target.value) })} placeholder="0" className="pd-input" />
-                    </Field>
+              {variants.map((v, i) => {
+                const finalPrice = numericPrice + (v.priceDelta || 0);
+                const hasExtra = (v.priceDelta || 0) > 0;
+                return (
+                  <div key={i} className="pd-variant-card">
+                    <button
+                      type="button"
+                      onClick={() => removeVariant(i)}
+                      className="pd-variant-x"
+                      aria-label="Remove variant"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" width="14" height="14">
+                        <path d="M6 6l12 12M18 6L6 18" />
+                      </svg>
+                    </button>
+
+                    <div className="pd-variant-row">
+                      <div className="pd-variant-field">
+                        <label className="pd-field-label">Label</label>
+                        <input
+                          value={v.label}
+                          onChange={(e) => updateVariant(i, { label: e.target.value })}
+                          placeholder="e.g. Size M"
+                          className="pd-input"
+                        />
+                      </div>
+
+                      <div className="pd-variant-field">
+                        <label className="pd-field-label">Price</label>
+                        <div className="pd-variant-price">
+                          <button
+                            type="button"
+                            onClick={() => updateVariant(i, { priceDelta: 0 })}
+                            className={`pd-variant-pill ${!hasExtra ? "on" : ""}`}
+                          >
+                            Same price
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateVariant(i, { priceDelta: hasExtra ? v.priceDelta : 1000 })}
+                            className={`pd-variant-pill ${hasExtra ? "on" : ""}`}
+                          >
+                            + Extra
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {hasExtra && (
+                      <div className="pd-variant-extra-row">
+                        <label className="pd-field-label">Add to base price</label>
+                        <div className="pd-variant-extra-input">
+                          <span className="pd-variant-extra-prefix">+ ₦</span>
+                          <input
+                            type="number"
+                            value={v.priceDelta || ""}
+                            onChange={(e) => updateVariant(i, { priceDelta: Number(e.target.value) || 0 })}
+                            placeholder="1000"
+                            className="pd-input"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pd-variant-preview">
+                      <span className="pd-variant-preview-label">{v.label.trim() || "Variant"}</span>
+                      <span className="pd-variant-preview-dot">·</span>
+                      <span className="pd-variant-preview-price">{naira(finalPrice)}</span>
+                    </div>
                   </div>
-                  <button type="button" onClick={() => removeVariant(i)} className="pd-remove-variant">Remove</button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
