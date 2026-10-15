@@ -34,7 +34,7 @@ export function ProductCard({
   const altText = `${product.name} — biomart`;
 
   // Use the ACTUAL field name from types/index.ts
-  const inStock = product.in_stock;
+  const inStock = (product as any).inStock ?? (product as any).in_stock ?? true;
 
   const hasDiscount =
     showDiscount &&
