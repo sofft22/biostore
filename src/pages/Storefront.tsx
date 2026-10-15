@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useStoreContext } from "../context/StoreContext";
 import { useCart } from "../context/CartContext";
@@ -8,6 +8,11 @@ import CartDrawer from "../components/CartDrawer";
 import { getCategoryLabel } from "../lib/categories";
 import { getCategories, getCategoryImages } from "../lib/storeData";
 import type { Category, Product } from "../types";
+
+/** Capitalize first letter of each word */
+function titleCase(s: string): string {
+  return s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+}
 
 export default function Storefront() {
   const { slug = "" } = useParams<{ slug: string }>();
@@ -21,7 +26,11 @@ export default function Storefront() {
   const [activeCategory, setActiveCategory] = useState("all");
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryImages, setCategoryImages] = useState<Record<string, string>>({});
-  const [scrolled, setScrolled] = useState(false);
+
+  // Header behavior
+  const [headerHidden, setHeaderHidden] = useState(false);
+  const [headerSolid, setHeaderSolid] = useState(false);
+  const lastYRef = useRef(0);
 
   useEffect(() => {
     if (!slug) return;
@@ -30,9 +39,36 @@ export default function Storefront() {
   }, [slug]);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 80);
+    let ticking = false;
+    const update = () => {
+      const y = window.scrollY;
+      const last = lastYRef.current;
+      const diff = y - last;
+      const atTop = y < 40;
+
+      // Solid header once past the banner top
+      setHeaderSolid(y > 120);
+
+      // Hide when scrolling down past a threshold, show when scrolling up
+      if (atTop) {
+        setHeaderHidden(false);
+      } else if (diff > 6 && y > 200) {
+        setHeaderHidden(true);
+      } else if (diff < -6) {
+        setHeaderHidden(false);
+      }
+
+      lastYRef.current = y;
+      ticking = false;
+    };
+    const onScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(update);
+        ticking = true;
+      }
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
+    update();
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
@@ -81,7 +117,6 @@ export default function Storefront() {
   }, [products, activeCategory, search]);
 
   const handleOpenProduct = (p: Product) => {
-    console.log("[track]", p.id);
     setOpenProduct(p);
   };
 
@@ -129,16 +164,37 @@ export default function Storefront() {
     );
   }
 
+  const headerClasses = [
+    "sf-head",
+    headerSolid ? "sf-head-solid" : "",
+    headerHidden ? "sf-head-hidden" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div className="sf-shell">
-      {/* ═══════════════ HEADER — transparent on banner ═══════════════ */}
-      <header className={`sf-head ${scrolled ? "sf-head-solid" : ""}`}>
+      {/* ═══════════════ HEADER ═══════════════ */}
+      <header className={headerClasses}>
         <div className="sf-head-inner">
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             className="sf-wordmark"
           >
-            {store.name}
+            <svg
+              className="sf-wordmark-icon"
+              viewBox="0 0 60 64"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3.2"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M10 20H50L55 54Q55.4 58 51.5 58H8.5Q4.6 58 5 54Z" />
+              <path d="M20 26V14A10 10 0 0 1 40 14V26" />
+            </svg>
+            <span>{titleCase(store.name)}</span>
           </button>
 
           <div className="sf-head-spacer" />
@@ -197,7 +253,7 @@ export default function Storefront() {
         )}
       </header>
 
-      {/* ═══════════════ BANNER — full bleed ═══════════════ */}
+      {/* ═══════════════ BANNER ═══════════════ */}
       <section className="sf-banner">
         <img
           src={
@@ -244,15 +300,13 @@ export default function Storefront() {
                 priority={i < 4}
                 showDiscount
                 onClick={() => handleOpenProduct(p)}
-                onChat={() => {}}
-                onAddToCart={() => handleAddToCart(p, 1, null, p.price)}
               />
             ))}
           </div>
         </section>
       )}
 
-      {/* ═══════════════ CATEGORIES — KOVA-style, centered ═══════════════ */}
+      {/* ═══════════════ CATEGORIES ═══════════════ */}
       {usedCategories.length > 0 && (
         <section className="sf-section sf-section-wide" id="categories">
           <div className="sf-section-head-center">
@@ -281,7 +335,7 @@ export default function Storefront() {
                   )}
                   <div className="sf-cat-tile-overlay" />
                   <div className="sf-cat-tile-content">
-                    <div className="sf-cat-tile-name">{c.label}</div>
+                    <div className="sf-cat-tile-name">{titleCase(c.label)}</div>
                   </div>
                 </button>
               );
@@ -336,20 +390,18 @@ export default function Storefront() {
                 priority={i < 4}
                 showDiscount
                 onClick={() => handleOpenProduct(p)}
-                onChat={() => {}}
-                onAddToCart={() => handleAddToCart(p, 1, null, p.price)}
               />
             ))}
           </div>
         )}
       </section>
 
-      {/* ═══════════════ FOOTER — Shop + Contact ═══════════════ */}
+      {/* ═══════════════ FOOTER ═══════════════ */}
       <footer className="sf-footer" id="contact">
         <div className="sf-footer-inner">
           <div className="sf-footer-top">
             <div>
-              <div className="sf-footer-brand">{store.name}</div>
+              <div className="sf-footer-brand">{titleCase(store.name)}</div>
               {store.bio && <p className="sf-footer-tag">{store.bio}</p>}
             </div>
 
@@ -411,7 +463,7 @@ export default function Storefront() {
           </div>
 
           <div className="sf-footer-bot">
-            <span>© {new Date().getFullYear()} {store.name}</span>
+            <span>© {new Date().getFullYear()} {titleCase(store.name)}</span>
             <span className="sf-footer-pow">
               <svg viewBox="0 0 60 64" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinejoin="round" strokeLinecap="round">
                 <path d="M10 20H50L55 54Q55.4 58 51.5 58H8.5Q4.6 58 5 54Z" />
