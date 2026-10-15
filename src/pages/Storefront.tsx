@@ -9,7 +9,6 @@ import { getCategoryLabel } from "../lib/categories";
 import { getCategories, getCategoryImages } from "../lib/storeData";
 import type { Category, Product } from "../types";
 
-/** Split "Adaeze's Closet" into { first, second } — first word bold, rest thin */
 function splitBrandName(name: string): { first: string; second: string } {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return { first: parts[0], second: "" };
@@ -30,14 +29,30 @@ export default function Storefront() {
   const [categoryImages, setCategoryImages] = useState<Record<string, string>>({});
   const [headerHidden, setHeaderHidden] = useState(false);
   const [headerSolid, setHeaderSolid] = useState(false);
+  const [categoryTick, setCategoryTick] = useState(0);
   const lastYRef = useRef(0);
 
+  /* Read categories from localStorage (refresh on focus) */
   useEffect(() => {
     if (!slug) return;
     setCategories(getCategories(slug));
     setCategoryImages(getCategoryImages(slug));
-  }, [slug]);
+  }, [slug, categoryTick]);
 
+  useEffect(() => {
+    const onFocus = () => setCategoryTick((t) => t + 1);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") setCategoryTick((t) => t + 1);
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  /* Header hide/show on scroll */
   useEffect(() => {
     let ticking = false;
     const update = () => {
@@ -66,24 +81,27 @@ export default function Storefront() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  /* Only categories with at least 1 product */
   const usedCategories = useMemo(() => {
     const usedIds = new Set<string>();
     for (const p of products) {
-      if (p.category_id) usedIds.add(p.category_id);
+      const cid = (p as any).category_id || (p as any).category;
+      if (cid) usedIds.add(cid);
     }
     return categories.filter((c) => usedIds.has(c.id));
   }, [categories, products]);
 
+  /* Count per category */
   const categoryCounts = useMemo(() => {
     const map: Record<string, number> = {};
     for (const p of products) {
-      if (p.category_id) {
-        map[p.category_id] = (map[p.category_id] ?? 0) + 1;
-      }
+      const cid = (p as any).category_id || (p as any).category;
+      if (cid) map[cid] = (map[cid] ?? 0) + 1;
     }
     return map;
   }, [products]);
 
+  /* New arrivals — 4 newest */
   const newArrivals = useMemo(() => {
     return [...products]
       .sort(
@@ -94,10 +112,13 @@ export default function Storefront() {
       .slice(0, 4);
   }, [products]);
 
+  /* Filtered for "Shop all" */
   const filtered = useMemo(() => {
     let list = products;
     if (activeCategory !== "all") {
-      list = list.filter((p) => p.category_id === activeCategory);
+      list = list.filter(
+        (p) => ((p as any).category_id || (p as any).category) === activeCategory
+      );
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -122,15 +143,12 @@ export default function Storefront() {
     setCartOpen(true);
   };
 
-  const scrollToShop = () => {
+  const scrollToShop = () =>
     document.getElementById("shop-all")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-  const scrollToNew = () => {
+  const scrollToNew = () =>
     document.getElementById("new-arrivals")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-  const scrollToCategories = () => {
+  const scrollToCategories = () =>
     document.getElementById("categories")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
 
   if (loading) {
     return (
@@ -151,7 +169,10 @@ export default function Storefront() {
     );
   }
 
-  const brand = splitBrandName(store.name);
+  const brand = splitBrandName(store.name || "");
+  const tagline = (store as any).tagline || store.bio || "";
+  const address = (store as any).address || "";
+
   const headerClasses = [
     "sf-head",
     headerSolid ? "sf-head-solid" : "",
@@ -160,7 +181,7 @@ export default function Storefront() {
 
   return (
     <div className="sf-shell">
-      {/* HEADER */}
+      {/* ══════════ HEADER ══════════ */}
       <header className={headerClasses}>
         <div className="sf-head-inner">
           <button
@@ -168,11 +189,9 @@ export default function Storefront() {
             className="sf-wordmark"
             aria-label={store.name}
           >
-            <span className="sf-wordmark-1">{brand.first}</span>
-            {brand.second && (
-              <span className="sf-wordmark-2">{brand.second}</span>
-            )}
-            <span className="sf-wordmark-dot">.</span>
+            {brand.first && <span className="sf-wordmark-1">{brand.first}</span>}
+            {brand.second && <span className="sf-wordmark-2">{brand.second}</span>}
+            {brand.first && <span className="sf-wordmark-dot">.</span>}
           </button>
 
           <div className="sf-head-spacer" />
@@ -231,7 +250,7 @@ export default function Storefront() {
         )}
       </header>
 
-      {/* BANNER */}
+      {/* ══════════ BANNER ══════════ */}
       <section className="sf-banner">
         <img
           src={
@@ -243,7 +262,7 @@ export default function Storefront() {
         <div className="sf-banner-overlay" />
         <div className="sf-banner-text">
           <h1 className="sf-banner-tagline">
-            {store.bio || "Where Lagos style meets everyday luxury."}
+            {tagline || "Where Lagos style meets everyday luxury."}
           </h1>
           <button onClick={scrollToShop} className="sf-banner-cta">
             Shop now
@@ -254,7 +273,7 @@ export default function Storefront() {
         </div>
       </section>
 
-      {/* NEW ARRIVALS */}
+      {/* ══════════ NEW ARRIVALS ══════════ */}
       {newArrivals.length > 0 && (
         <section className="sf-section" id="new-arrivals">
           <div className="sf-section-head">
@@ -279,7 +298,6 @@ export default function Storefront() {
                 showNew={i < 4}
                 showDiscount
                 onClick={() => handleOpenProduct(p)}
-                onChat={() => {}}
                 onAddToCart={() => handleAddToCart(p, 1, null, p.price)}
               />
             ))}
@@ -287,17 +305,27 @@ export default function Storefront() {
         </section>
       )}
 
-      {/* CATEGORIES — always show when there's at least 1 */}
+      {/* DIVIDER */}
+      {newArrivals.length > 0 && usedCategories.length > 0 && (
+        <div className="sf-divider" aria-hidden="true">
+          <span className="sf-divider-line" />
+          <span className="sf-divider-dot" />
+          <span className="sf-divider-line" />
+        </div>
+      )}
+
+      {/* ══════════ CATEGORIES ══════════ */}
       {usedCategories.length > 0 && (
         <section className="sf-section sf-section-wide" id="categories">
           <div className="sf-section-head-center">
             <h2 className="sf-section-title-center">Shop by category</h2>
           </div>
 
-          <div className="sf-cat-grid">
+          <div className={`sf-cat-grid sf-cat-count-${Math.min(usedCategories.length, 5)}`}>
             {usedCategories.map((c) => {
               const img = categoryImages[c.id];
               const active = activeCategory === c.id;
+              const count = categoryCounts[c.id] ?? 0;
               return (
                 <button
                   key={c.id}
@@ -317,6 +345,9 @@ export default function Storefront() {
                   <div className="sf-cat-tile-overlay" />
                   <div className="sf-cat-tile-content">
                     <div className="sf-cat-tile-name">{c.label}</div>
+                    <div className="sf-cat-tile-count">
+                      {count} {count === 1 ? "piece" : "pieces"}
+                    </div>
                   </div>
                 </button>
               );
@@ -325,7 +356,16 @@ export default function Storefront() {
         </section>
       )}
 
-      {/* SHOP ALL */}
+      {/* DIVIDER */}
+      {usedCategories.length > 0 && filtered.length > 0 && (
+        <div className="sf-divider" aria-hidden="true">
+          <span className="sf-divider-line" />
+          <span className="sf-divider-dot" />
+          <span className="sf-divider-line" />
+        </div>
+      )}
+
+      {/* ══════════ SHOP ALL ══════════ */}
       <section className="sf-section" id="shop-all">
         <div className="sf-section-head">
           <div>
@@ -357,9 +397,7 @@ export default function Storefront() {
           <div className="sf-empty">
             <h3 className="sf-empty-title">Nothing here yet</h3>
             <p className="sf-empty-sub">
-              {search.trim()
-                ? `No products match "${search}".`
-                : "Try another category."}
+              {search.trim() ? `No products match "${search}".` : "Try another category."}
             </p>
           </div>
         ) : (
@@ -372,7 +410,6 @@ export default function Storefront() {
                 showNew={i < 4}
                 showDiscount
                 onClick={() => handleOpenProduct(p)}
-                onChat={() => {}}
                 onAddToCart={() => handleAddToCart(p, 1, null, p.price)}
               />
             ))}
@@ -380,19 +417,19 @@ export default function Storefront() {
         )}
       </section>
 
-      {/* FOOTER */}
+      {/* ══════════ FOOTER ══════════ */}
       <footer className="sf-footer" id="contact">
         <div className="sf-footer-inner">
           <div className="sf-footer-top">
             <div>
               <div className="sf-footer-brand">
-                <span className="sf-footer-brand-1">{brand.first}</span>
-                {brand.second && (
-                  <span className="sf-footer-brand-2">{brand.second}</span>
-                )}
-                <span className="sf-footer-brand-dot">.</span>
+                {brand.first && <span className="sf-footer-brand-1">{brand.first}</span>}
+                {brand.second && <span className="sf-footer-brand-2">{brand.second}</span>}
+                {brand.first && <span className="sf-footer-brand-dot">.</span>}
               </div>
-              {store.bio && <p className="sf-footer-tag">{store.bio}</p>}
+              {(store.bio || tagline) && (
+                <p className="sf-footer-tag">{store.bio || tagline}</p>
+              )}
             </div>
 
             <div className="sf-footer-col">
@@ -408,26 +445,14 @@ export default function Storefront() {
               <h4 className="sf-footer-h">Contact us</h4>
               <div className="sf-footer-socials">
                 {store.whatsapp && (
-                  <a
-                    href={`https://wa.me/${store.whatsapp.replace(/\D/g, "")}`}
-                    target="_blank"
-                    rel="noopener"
-                    className="sf-social wa"
-                    aria-label="WhatsApp"
-                  >
+                  <a href={`https://wa.me/${store.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noopener" className="sf-social wa" aria-label="WhatsApp">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                       <path d="M17.5 14.4c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.66.15-.2.3-.77.96-.94 1.16-.18.2-.35.22-.65.07-.3-.15-1.25-.46-2.39-1.47-.88-.79-1.48-1.76-1.65-2.06-.18-.3-.02-.46.13-.6.14-.14.3-.35.45-.53.15-.18.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.6-.9-2.18-.24-.57-.48-.5-.66-.5h-.55c-.2 0-.5.07-.77.37-.27.3-1.02.99-1.02 2.42s1.04 2.81 1.19 3c.15.2 2.05 3.13 4.96 4.39.7.3 1.24.48 1.66.61.7.22 1.33.19 1.83.12.56-.08 1.75-.72 1.99-1.4.25-.7.25-1.29.18-1.41-.07-.13-.27-.2-.56-.35z M12 2C6.48 2 2 6.48 2 12c0 1.77.46 3.43 1.28 4.87L2 22l5.28-1.38c1.4.78 3 .22 4.72 1.22 5.52 0 10-4.48 10-10S17.52 2 12 2z" />
                     </svg>
                   </a>
                 )}
                 {store.instagram && (
-                  <a
-                    href={`https://instagram.com/${store.instagram}`}
-                    target="_blank"
-                    rel="noopener"
-                    className="sf-social ig"
-                    aria-label="Instagram"
-                  >
+                  <a href={`https://instagram.com/${store.instagram}`} target="_blank" rel="noopener" className="sf-social ig" aria-label="Instagram">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="3" width="18" height="18" rx="5" />
                       <circle cx="12" cy="12" r="4" />
@@ -436,39 +461,31 @@ export default function Storefront() {
                   </a>
                 )}
                 {store.tiktok && (
-                  <a
-                    href={`https://tiktok.com/@${store.tiktok}`}
-                    target="_blank"
-                    rel="noopener"
-                    className="sf-social tt"
-                    aria-label="TikTok"
-                  >
+                  <a href={`https://tiktok.com/@${store.tiktok}`} target="_blank" rel="noopener" className="sf-social tt" aria-label="TikTok">
                     <svg viewBox="0 0 24 24" fill="currentColor">
                       <path d="M19.5 6.5a4.5 4.5 0 0 1-3.5-1.6v7.4a5.8 5.8 0 1 1-5.8-5.8c.2 0 .4 0 .6.05v2.95a2.85 2.85 0 1 0 2.2 2.78V2h3a4.5 4.5 0 0 0 3.5 4.5z" />
                     </svg>
                   </a>
                 )}
               </div>
+              {address && <p className="sf-footer-address">{address}</p>}
             </div>
           </div>
 
           <div className="sf-footer-bot">
-            <span>
-              <span className="sf-footer-brand-1">{brand.first}</span>
-              {brand.second && (
-                <span className="sf-footer-brand-2">{brand.second}</span>
-              )}
-              <span className="sf-footer-brand-dot">.</span>
-              {" "}
-              <span style={{ opacity: 0.7, marginLeft: 6, fontSize: "0.85em" }}>· Lagos</span>
-            </span>
-            <span className="sf-footer-pow">
+            <span className="sf-footer-copyright">© 2026 {store.name}</span>
+            <a
+              href="https://biomart.com"
+              target="_blank"
+              rel="noopener"
+              className="sf-footer-pow"
+            >
               <svg viewBox="0 0 60 64" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinejoin="round" strokeLinecap="round">
                 <path d="M10 20H50L55 54Q55.4 58 51.5 58H8.5Q4.6 58 5 54Z" />
                 <path d="M20 26V14A10 10 0 0 1 40 14V26" />
               </svg>
               Powered by biomart
-            </span>
+            </a>
           </div>
         </div>
       </footer>
