@@ -38,6 +38,13 @@ export function ProductCard({
 
   const badge = product.badge?.trim();
 
+  // FIXED: only show "Sold out" when inStock is EXPLICITLY false.
+  // Handles both camelCase (inStock) and snake_case (in_stock) safely.
+  const inStock =
+    (product as any).inStock ??
+    (product as any).in_stock ??
+    true;
+
   return (
     <div className="pc">
       <button
@@ -72,7 +79,7 @@ export function ProductCard({
           </div>
         )}
 
-        {!product.in_stock && (
+        {!inStock && (
           <div className="pc-sold-out">
             <span>Sold out</span>
           </div>
