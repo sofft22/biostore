@@ -1,11 +1,11 @@
 import { useState, useRef, useMemo } from 'react';
-import { useSettings } from '../context/SettingsContext';
-import { formatPrice } from '../config';
-import type { Product } from '../types';
+import { naira } from '../lib/format';
+import type { Product, Store } from '../types';
 
 interface Props {
   product: Product;
   products: Product[];
+  store: Store;
   onClose: () => void;
   onAddToCart: (
     qty: number,
@@ -34,11 +34,11 @@ function shuffle<T>(arr: T[]): T[] {
 export function ProductModal({
   product,
   products,
+  store,
   onClose,
   onAddToCart,
   onOpenProduct,
 }: Props) {
-  const { settings } = useSettings();
   const [qty, setQty] = useState(1);
   const [selectedVariantLabel, setSelectedVariantLabel] = useState<string | null>(null);
   const [activeImage, setActiveImage] = useState(0);
@@ -120,8 +120,9 @@ export function ProductModal({
   };
 
   const openWa = (message: string) => {
+    const number = (store.whatsapp ?? '').replace(/\D/g, '');
     window.open(
-      `https://wa.me/${settings.whatsapp_number}?text=${encodeURIComponent(message)}`,
+      `https://wa.me/${number}?text=${encodeURIComponent(message)}`,
       '_blank'
     );
   };
@@ -196,7 +197,6 @@ export function ProductModal({
           </svg>
         </button>
 
-        {/* ── TOP ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2">
           <div style={{ backgroundColor: CREAM }}>
             <button
@@ -273,7 +273,6 @@ export function ProductModal({
             )}
           </div>
 
-          {/* Info column */}
           <div className="p-6 sm:p-12" style={{ backgroundColor: CREAM }}>
             <h2
               className="text-[15px] font-normal uppercase leading-[1.4] tracking-[0.12em] sm:text-[16px] sm:tracking-[0.14em]"
@@ -287,14 +286,14 @@ export function ProductModal({
                 className="font-numbers text-[22px] sm:text-[26px]"
                 style={{ color: CHARCOAL }}
               >
-                {formatPrice(displayPrice)}
+                {naira(displayPrice)}
               </p>
               {displayCompare && (
                 <p
                   className="text-[13.5px] line-through sm:text-[14.5px]"
                   style={{ color: MUTED }}
                 >
-                  {formatPrice(displayCompare)}
+                  {naira(displayCompare)}
                 </p>
               )}
             </div>
@@ -338,7 +337,7 @@ export function ProductModal({
                               color: active ? CREAM : BRAND_GREEN,
                             }}
                           >
-                            +{formatPrice(v.priceDelta)}
+                            +{naira(v.priceDelta)}
                           </span>
                         )}
                       </button>
@@ -350,7 +349,6 @@ export function ProductModal({
 
             {product.in_stock && (
               <>
-                {/* Qty */}
                 <div className="mt-8 flex items-center gap-4">
                   <span
                     className="text-[10.5px] font-bold uppercase tracking-[0.2em]"
@@ -401,7 +399,6 @@ export function ProductModal({
                   </div>
                 </div>
 
-                {/* Buttons — Add to bag (dark) + Order (brand green) */}
                 <div className="mt-8 grid grid-cols-2 gap-3">
                   <button
                     onClick={handleAdd}
@@ -462,7 +459,6 @@ export function ProductModal({
                   </p>
                 )}
 
-                {/* Ask us */}
                 <div className="mt-5 flex items-center justify-center">
                   <button
                     onClick={handleAskUs}
@@ -481,7 +477,6 @@ export function ProductModal({
                   </button>
                 </div>
 
-                {/* Share */}
                 <div
                   className="mt-9 flex items-center gap-4 pt-7"
                   style={{ borderTop: `1px solid ${CREAM_DARK}` }}
@@ -560,7 +555,6 @@ export function ProductModal({
           </div>
         </div>
 
-        {/* ── COMPLETE THE LOOK ── */}
         {pairs.length > 0 && (
           <div
             className="px-6 py-14 sm:px-12 sm:py-20"
@@ -612,7 +606,7 @@ export function ProductModal({
                     className="mt-1 font-numbers text-[12px] sm:text-[13px]"
                     style={{ color: MUTED }}
                   >
-                    {formatPrice(p.price)}
+                    {naira(p.price)}
                   </p>
                 </button>
               ))}
