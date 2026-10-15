@@ -10,8 +10,8 @@ import { getCategories, getCategoryImages } from "../lib/storeData";
 import type { Category, Product } from "../types";
 
 function splitBrandName(name: string): { first: string; second: string } {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return { first: parts[0], second: "" };
+  const parts = (name || "").trim().split(/\s+/);
+  if (parts.length <= 1) return { first: parts[0] || "", second: "" };
   return { first: parts[0], second: parts.slice(1).join(" ") };
 }
 
@@ -32,7 +32,6 @@ export default function Storefront() {
   const [categoryTick, setCategoryTick] = useState(0);
   const lastYRef = useRef(0);
 
-  /* Read categories from localStorage (refresh on focus) */
   useEffect(() => {
     if (!slug) return;
     setCategories(getCategories(slug));
@@ -52,7 +51,6 @@ export default function Storefront() {
     };
   }, []);
 
-  /* Header hide/show on scroll */
   useEffect(() => {
     let ticking = false;
     const update = () => {
@@ -81,7 +79,6 @@ export default function Storefront() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  /* Only categories with at least 1 product */
   const usedCategories = useMemo(() => {
     const usedIds = new Set<string>();
     for (const p of products) {
@@ -91,7 +88,6 @@ export default function Storefront() {
     return categories.filter((c) => usedIds.has(c.id));
   }, [categories, products]);
 
-  /* Count per category */
   const categoryCounts = useMemo(() => {
     const map: Record<string, number> = {};
     for (const p of products) {
@@ -101,7 +97,6 @@ export default function Storefront() {
     return map;
   }, [products]);
 
-  /* New arrivals — 4 newest */
   const newArrivals = useMemo(() => {
     return [...products]
       .sort(
@@ -112,7 +107,6 @@ export default function Storefront() {
       .slice(0, 4);
   }, [products]);
 
-  /* Filtered for "Shop all" */
   const filtered = useMemo(() => {
     let list = products;
     if (activeCategory !== "all") {
@@ -169,19 +163,26 @@ export default function Storefront() {
     );
   }
 
-  const brand = splitBrandName(store.name || "");
+  const brand = splitBrandName(store.name);
   const tagline = (store as any).tagline || store.bio || "";
   const address = (store as any).address || "";
+  const bannerUrl =
+    (store as any).cover_url ||
+    "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=1600&q=85&auto=format&fit=crop";
 
   const headerClasses = [
     "sf-head",
     headerSolid ? "sf-head-solid" : "",
     headerHidden ? "sf-head-hidden" : "",
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const catCount = Math.min(usedCategories.length, 5);
 
   return (
     <div className="sf-shell">
-      {/* ══════════ HEADER ══════════ */}
+      {/* ═══════════ HEADER ═══════════ */}
       <header className={headerClasses}>
         <div className="sf-head-inner">
           <button
@@ -250,15 +251,9 @@ export default function Storefront() {
         )}
       </header>
 
-      {/* ══════════ BANNER ══════════ */}
+      {/* ═══════════ BANNER ═══════════ */}
       <section className="sf-banner">
-        <img
-          src={
-            (store as any).cover_url ||
-            "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=1600&q=85&auto=format&fit=crop"
-          }
-          alt=""
-        />
+        <img src={bannerUrl} alt="" />
         <div className="sf-banner-overlay" />
         <div className="sf-banner-text">
           <h1 className="sf-banner-tagline">
@@ -273,7 +268,7 @@ export default function Storefront() {
         </div>
       </section>
 
-      {/* ══════════ NEW ARRIVALS ══════════ */}
+      {/* ═══════════ NEW ARRIVALS ═══════════ */}
       {newArrivals.length > 0 && (
         <section className="sf-section" id="new-arrivals">
           <div className="sf-section-head">
@@ -305,7 +300,7 @@ export default function Storefront() {
         </section>
       )}
 
-      {/* DIVIDER */}
+      {/* ═══════════ DIVIDER ═══════════ */}
       {newArrivals.length > 0 && usedCategories.length > 0 && (
         <div className="sf-divider" aria-hidden="true">
           <span className="sf-divider-line" />
@@ -314,14 +309,14 @@ export default function Storefront() {
         </div>
       )}
 
-      {/* ══════════ CATEGORIES ══════════ */}
+      {/* ═══════════ CATEGORIES ═══════════ */}
       {usedCategories.length > 0 && (
         <section className="sf-section sf-section-wide" id="categories">
           <div className="sf-section-head-center">
             <h2 className="sf-section-title-center">Shop by category</h2>
           </div>
 
-          <div className={`sf-cat-grid sf-cat-count-${Math.min(usedCategories.length, 5)}`}>
+          <div className={`sf-cat-grid sf-cat-count-${catCount}`}>
             {usedCategories.map((c) => {
               const img = categoryImages[c.id];
               const active = activeCategory === c.id;
@@ -356,8 +351,8 @@ export default function Storefront() {
         </section>
       )}
 
-      {/* DIVIDER */}
-      {usedCategories.length > 0 && filtered.length > 0 && (
+      {/* ═══════════ DIVIDER ═══════════ */}
+      {usedCategories.length > 0 && (
         <div className="sf-divider" aria-hidden="true">
           <span className="sf-divider-line" />
           <span className="sf-divider-dot" />
@@ -365,7 +360,7 @@ export default function Storefront() {
         </div>
       )}
 
-      {/* ══════════ SHOP ALL ══════════ */}
+      {/* ═══════════ SHOP ALL ═══════════ */}
       <section className="sf-section" id="shop-all">
         <div className="sf-section-head">
           <div>
@@ -417,7 +412,7 @@ export default function Storefront() {
         )}
       </section>
 
-      {/* ══════════ FOOTER ══════════ */}
+      {/* ═══════════ FOOTER ═══════════ */}
       <footer className="sf-footer" id="contact">
         <div className="sf-footer-inner">
           <div className="sf-footer-top">
@@ -427,9 +422,7 @@ export default function Storefront() {
                 {brand.second && <span className="sf-footer-brand-2">{brand.second}</span>}
                 {brand.first && <span className="sf-footer-brand-dot">.</span>}
               </div>
-              {(store.bio || tagline) && (
-                <p className="sf-footer-tag">{store.bio || tagline}</p>
-              )}
+              {store.bio && <p className="sf-footer-tag">{store.bio}</p>}
             </div>
 
             <div className="sf-footer-col">
@@ -443,32 +436,78 @@ export default function Storefront() {
 
             <div className="sf-footer-col">
               <h4 className="sf-footer-h">Contact us</h4>
-              <div className="sf-footer-socials">
+              <div className="sf-footer-contacts">
                 {store.whatsapp && (
-                  <a href={`https://wa.me/${store.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noopener" className="sf-social wa" aria-label="WhatsApp">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M17.5 14.4c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.66.15-.2.3-.77.96-.94 1.16-.18.2-.35.22-.65.07-.3-.15-1.25-.46-2.39-1.47-.88-.79-1.48-1.76-1.65-2.06-.18-.3-.02-.46.13-.6.14-.14.3-.35.45-.53.15-.18.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.6-.9-2.18-.24-.57-.48-.5-.66-.5h-.55c-.2 0-.5.07-.77.37-.27.3-1.02.99-1.02 2.42s1.04 2.81 1.19 3c.15.2 2.05 3.13 4.96 4.39.7.3 1.24.48 1.66.61.7.22 1.33.19 1.83.12.56-.08 1.75-.72 1.99-1.4.25-.7.25-1.29.18-1.41-.07-.13-.27-.2-.56-.35z M12 2C6.48 2 2 6.48 2 12c0 1.77.46 3.43 1.28 4.87L2 22l5.28-1.38c1.4.78 3 .22 4.72 1.22 5.52 0 10-4.48 10-10S17.52 2 12 2z" />
-                    </svg>
+                  <a
+                    href={`https://wa.me/${store.whatsapp.replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noopener"
+                    className="sf-contact"
+                  >
+                    <span className="sf-contact-icon">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.86 9.86 0 0 0 12.04 2m0 1.67c2.2 0 4.27.86 5.83 2.42a8.2 8.2 0 0 1 2.41 5.82c0 4.55-3.7 8.25-8.25 8.25-1.47 0-2.92-.4-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.39c0-4.55 3.7-8.24 8.23-8.24M8.53 7.33c-.17 0-.44.06-.67.31-.23.25-.88.86-.88 2.1 0 1.24.9 2.44 1.03 2.61.13.17 1.76 2.68 4.25 3.76.59.26 1.06.41 1.42.52.6.19 1.14.16 1.57.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.08.15-1.18-.06-.1-.23-.17-.48-.29-.25-.13-1.47-.72-1.7-.8-.23-.09-.39-.13-.55.13-.17.25-.64.8-.79.97-.14.16-.29.18-.54.06-.25-.12-1.05-.39-2-1.24-.74-.66-1.24-1.47-1.39-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.44.13-.14.17-.25.25-.41.09-.17.04-.31-.02-.44-.06-.13-.55-1.34-.76-1.83-.2-.48-.4-.41-.55-.42l-.46-.01c-.16 0-.42.06-.64.31" />
+                      </svg>
+                    </span>
+                    <span className="sf-contact-text">
+                      <b>{store.name}</b>
+                      <small>{store.whatsapp}</small>
+                    </span>
                   </a>
                 )}
                 {store.instagram && (
-                  <a href={`https://instagram.com/${store.instagram}`} target="_blank" rel="noopener" className="sf-social ig" aria-label="Instagram">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="3" width="18" height="18" rx="5" />
-                      <circle cx="12" cy="12" r="4" />
-                      <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
-                    </svg>
+                  <a
+                    href={`https://instagram.com/${store.instagram}`}
+                    target="_blank"
+                    rel="noopener"
+                    className="sf-contact"
+                  >
+                    <span className="sf-contact-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="5" />
+                        <circle cx="12" cy="12" r="4" />
+                        <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+                      </svg>
+                    </span>
+                    <span className="sf-contact-text">
+                      <b>Instagram</b>
+                      <small>@{store.instagram}</small>
+                    </span>
                   </a>
                 )}
                 {store.tiktok && (
-                  <a href={`https://tiktok.com/@${store.tiktok}`} target="_blank" rel="noopener" className="sf-social tt" aria-label="TikTok">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M19.5 6.5a4.5 4.5 0 0 1-3.5-1.6v7.4a5.8 5.8 0 1 1-5.8-5.8c.2 0 .4 0 .6.05v2.95a2.85 2.85 0 1 0 2.2 2.78V2h3a4.5 4.5 0 0 0 3.5 4.5z" />
-                    </svg>
+                  <a
+                    href={`https://tiktok.com/@${store.tiktok}`}
+                    target="_blank"
+                    rel="noopener"
+                    className="sf-contact"
+                  >
+                    <span className="sf-contact-icon">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.8 20.1a6.34 6.34 0 0 0 10.86-4.43V8.66a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.84-.09" />
+                      </svg>
+                    </span>
+                    <span className="sf-contact-text">
+                      <b>TikTok</b>
+                      <small>@{store.tiktok}</small>
+                    </span>
                   </a>
                 )}
+                {address && (
+                  <div className="sf-contact sf-contact-address">
+                    <span className="sf-contact-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                        <circle cx="12" cy="10" r="3" />
+                      </svg>
+                    </span>
+                    <span className="sf-contact-text">
+                      <b>Visit us</b>
+                      <small>{address}</small>
+                    </span>
+                  </div>
+                )}
               </div>
-              {address && <p className="sf-footer-address">{address}</p>}
             </div>
           </div>
 
